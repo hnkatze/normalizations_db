@@ -1,40 +1,41 @@
 /**
- * Normalization engine: confirmed functional dependencies in, a 3NF schema out.
+ * Motor de normalización: entran dependencias funcionales confirmadas, sale un esquema 3NF.
  *
- * Scope is capped at 3NF by explicit project decision (no BCNF/4NF/5NF here).
+ * El alcance está limitado a 3NF por decisión explícita del proyecto (no se implementan
+ * BCNF/4NF/5NF aquí).
  *
- * The core idea is that every non-key column is "owned" by exactly one table at
- * a time. It starts out owned by the fact table. A confirmed dependency
- * `determinant -> dependent` reassigns `dependent`'s ownership to a table keyed
- * by `determinant` (creating that table on first use, reusing it when several
- * dependencies share the same determinant). `determinant`'s own columns are
- * never moved — they stay wherever they already are, which is what turns them
- * into the foreign key back to the table they now key.
+ * La idea central es que toda columna que no es clave está "poseída" por exactamente una
+ * tabla a la vez. Al inicio pertenece a la tabla de hechos. Una dependencia confirmada
+ * `determinant -> dependent` reasigna la posesión de `dependent` a una tabla cuya clave es
+ * `determinant` (creando esa tabla la primera vez que se usa, reutilizándola cuando varias
+ * dependencias comparten el mismo determinante). Las columnas propias de `determinant`
+ * nunca se mueven — permanecen donde ya estaban, lo cual es precisamente lo que las convierte
+ * en la clave foránea de vuelta hacia la tabla de la que ahora son clave.
  *
- * Two passes apply this reassignment for two different reasons:
+ * Dos pasadas aplican esta reasignación por dos razones distintas:
  *
- * 1. 2NF: `determinant` is a proper subset of the ORIGINAL primary key (only
- *    possible when that key is composite). This runs once, before 3NF, because
- *    it is defined purely in terms of the original key and never needs to look
- *    at intermediate tables.
- * 2. 3NF: `determinant` is not fully contained in the original primary key,
- *    i.e. it involves a non-key attribute. This runs as a fixpoint loop rather
- *    than a single pass so the chain case
+ * 1. 2NF: `determinant` es un subconjunto propio de la CLAVE PRIMARIA ORIGINAL (solo
+ *    posible cuando esa clave es compuesta). Esto se ejecuta una sola vez, antes de 3NF,
+ *    porque se define exclusivamente en términos de la clave original y nunca necesita
+ *    examinar tablas intermedias.
+ * 2. 3NF: `determinant` no está completamente contenido en la clave primaria original,
+ *    es decir, involucra un atributo que no es clave. Esto se ejecuta como un bucle de
+ *    punto fijo en lugar de una sola pasada, de modo que el caso de cadena
  *    (`venta_id -> cliente_id -> cliente_ciudad_id -> cliente_ciudad_pais`)
- *    reads as "keep displacing until nothing more moves" rather than as a
- *    hand-rolled two-level special case. Every dependent is claimed by at most
- *    one confirmed dependency and is finalized the first time it moves, so in
- *    practice the loop always converges after a single displacing round plus
- *    one confirming round; the round cap below is a defensive, explicit guard
- *    against a malformed (cyclic) confirmed-dependency list, not a value this
- *    algorithm is expected to ever exhaust.
+ *    se lea como "seguir desplazando hasta que nada más se mueva" en lugar de como
+ *    un caso especial de dos niveles hecho a mano. Cada dependiente es reclamado por a lo
+ *    sumo una dependencia confirmada y se finaliza la primera vez que se mueve, así que en
+ *    la práctica el bucle siempre converge tras una única ronda de desplazamiento más
+ *    una ronda de confirmación; el límite de rondas de abajo es una salvaguarda defensiva
+ *    y explícita contra una lista de dependencias confirmadas malformada (cíclica), no un
+ *    valor que se espere que este algoritmo agote alguna vez.
  *
- * Before either pass runs, reciprocal single-column determinants are merged.
- * If `{A} -> B` and `{B} -> A` are both confirmed, A and B are alternate
- * candidate keys of the same real-world entity (e.g. an id and a unique name)
- * and must land in ONE table, not two tables that each hold a foreign key to
- * the other. See `findReciprocalPairs` and `canonicalColumn` below for the
- * merge rule.
+ * Antes de que se ejecute cualquiera de las dos pasadas, se fusionan los determinantes
+ * recíprocos de una sola columna. Si tanto `{A} -> B` como `{B} -> A` están confirmados,
+ * A y B son claves candidatas alternativas de la misma entidad del mundo real (por ejemplo,
+ * un id y un nombre único) y deben quedar en UNA sola tabla, no en dos tablas que cada una
+ * tenga una clave foránea hacia la otra. Ver `findReciprocalPairs` y `canonicalColumn` más
+ * abajo para conocer la regla de fusión.
  */
 
 import type {
@@ -49,32 +50,32 @@ import type {
 } from "@/domain"
 import { columnNamesOf } from "@/domain"
 
-/** A table under construction: key and attributes only, no derived shape yet. */
+/** Una tabla en construcción: solo clave y atributos, todavía sin forma derivada. */
 type WorkingTable = {
   readonly name: string
   readonly primaryKey: readonly ColumnName[]
   readonly attributes: Set<ColumnName>
 }
 
-/** Why a determinant does or does not trigger displacement, tied to the domain's `Displacement`. */
+/** Por qué un determinante sí o no dispara un desplazamiento, ligado al `Displacement` del dominio. */
 type DeterminantClassification = Displacement | { readonly kind: "full" }
 
 /**
- * Table name for a table extracted by displacement, derived purely from its
- * determinant: the determinant's column names, in the source table's
- * declaration order, joined by `_`. This keeps naming a pure function of the
- * FD graph rather than of ad hoc heuristics (pluralization, stripping `_id`,
- * ...), so the same input always yields the same name.
+ * Nombre de la tabla para una tabla extraída por desplazamiento, derivado exclusivamente de
+ * su determinante: los nombres de columna del determinante, en el orden de declaración
+ * de la tabla de origen, unidos por `_`. Esto mantiene el nombrado como una función pura
+ * del grafo de dependencias funcionales en lugar de heurísticas ad hoc (pluralización,
+ * quitar `_id`, ...), de modo que la misma entrada siempre produce el mismo nombre.
  *
- * Two distinct determinants could in theory join to the same name (e.g. a
- * single column literally named `"a_b"` versus the composite `["a", "b"]`).
- * `tableForDeterminant` guards against silently conflating them.
+ * Dos determinantes distintos podrían en teoría unirse en el mismo nombre (por ejemplo, una
+ * sola columna literalmente llamada `"a_b"` frente a la compuesta `["a", "b"]`).
+ * `tableForDeterminant` protege contra confundirlos silenciosamente.
  */
 function deriveTableName(orderedDeterminant: readonly ColumnName[]): string {
   return orderedDeterminant.join("_")
 }
 
-/** True when `a` and `b` hold the same column names in the same order. */
+/** Verdadero cuando `a` y `b` contienen los mismos nombres de columna en el mismo orden. */
 function columnArraysEqual(a: readonly ColumnName[], b: readonly ColumnName[]): boolean {
   if (a.length !== b.length) {
     return false
@@ -83,8 +84,9 @@ function columnArraysEqual(a: readonly ColumnName[], b: readonly ColumnName[]): 
 }
 
 /**
- * Minimal union-find over a fixed set of column names, used to group columns
- * that reciprocally determine each other into one equivalence class.
+ * Estructura union-find mínima sobre un conjunto fijo de nombres de columna, usada para
+ * agrupar columnas que se determinan recíprocamente entre sí en una única clase de
+ * equivalencia.
  */
 function createColumnUnionFind(columns: readonly ColumnName[]): {
   readonly union: (a: ColumnName, b: ColumnName) => void
@@ -114,11 +116,11 @@ function createColumnUnionFind(columns: readonly ColumnName[]): {
 }
 
 /**
- * Finds every pair of distinct columns (A, B) for which BOTH `{A} -> B` and
- * `{B} -> A` are confirmed. Only single-column determinants are considered:
- * that is the shape a genuine alternate-key pair takes (an id and a unique
- * name/email for the same entity), and it is exactly what a per-dependent
- * pruning detector can emit for both directions of the same pair.
+ * Encuentra todo par de columnas distintas (A, B) para las cuales AMBAS `{A} -> B` y
+ * `{B} -> A` están confirmadas. Solo se consideran determinantes de una sola columna:
+ * esa es la forma que adopta un par genuino de claves alternativas (un id y un nombre/email
+ * único para la misma entidad), y es exactamente lo que un detector de poda por dependiente
+ * puede emitir para ambas direcciones del mismo par.
  */
 function findReciprocalPairs(
   dependencies: readonly FunctionalDependency[],
@@ -176,7 +178,7 @@ export function normalizeTo3NF(input: NormalizationInput): NormalizedSchema {
     return definition
   }
 
-  /** Reorders an arbitrary column set into the source table's declaration order. */
+  /** Reordena un conjunto arbitrario de columnas según el orden de declaración de la tabla de origen. */
   function orderColumns(columns: readonly ColumnName[]): readonly ColumnName[] {
     const wanted = new Set(columns)
     return allColumns.filter((column) => wanted.has(column))
@@ -199,11 +201,11 @@ export function normalizeTo3NF(input: NormalizationInput): NormalizedSchema {
 
   const finalizedDependents = new Set<ColumnName>()
 
-  // Reciprocal single-column determinants (`{A}->B` and `{B}->A` both
-  // confirmed) are alternate keys of the same entity and must resolve to the
-  // same determinant. The representative is the member declared first in the
-  // source table, so the choice is deterministic and independent of the
-  // confirmed-dependency array's own order.
+  // Los determinantes recíprocos de una sola columna (`{A}->B` y `{B}->A` ambos
+  // confirmados) son claves alternativas de la misma entidad y deben resolverse al
+  // mismo determinante. El representante es el miembro declarado primero en la
+  // tabla de origen, de modo que la elección es determinista e independiente del
+  // orden propio del arreglo de dependencias confirmadas.
   const columnUnionFind = createColumnUnionFind(allColumns)
   for (const [columnA, columnB] of findReciprocalPairs(confirmedDependencies)) {
     columnUnionFind.union(columnA, columnB)
@@ -217,12 +219,12 @@ export function normalizeTo3NF(input: NormalizationInput): NormalizedSchema {
   }
 
   /**
-   * Maps a column to its reciprocal-equivalence-class representative, or
-   * returns it unchanged when it belongs to no such class. Applied to
-   * determinants only: a dependent that happens to be the losing half of a
-   * reciprocal pair elsewhere still keeps its own identity as a dependent, so
-   * this fix stays scoped to the reported defect (mutual determination with
-   * no unrelated column pointing at either side).
+   * Mapea una columna al representante de su clase de equivalencia recíproca, o
+   * la devuelve sin cambios cuando no pertenece a ninguna de esas clases. Se aplica
+   * únicamente a determinantes: un dependiente que resulta ser la mitad perdedora de un
+   * par recíproco en otro lugar conserva su propia identidad como dependiente, así que
+   * esta corrección permanece acotada al defecto reportado (determinación mutua sin
+   * ninguna columna no relacionada que apunte a ninguno de los dos lados).
    */
   function canonicalColumn(column: ColumnName): ColumnName {
     const root = columnUnionFind.find(column)
@@ -260,17 +262,17 @@ export function normalizeTo3NF(input: NormalizationInput): NormalizedSchema {
     return created
   }
 
-  /** Moves `dependent` to the table keyed by `determinant`, once, permanently. */
+  /** Mueve `dependent` a la tabla cuya clave es `determinant`, una sola vez, de forma permanente. */
   function displace(determinant: readonly ColumnName[], dependent: ColumnName): boolean {
     if (finalizedDependents.has(dependent)) {
       return false
     }
     if (determinant.includes(dependent)) {
-      // Trivial: the dependent is already part of its own determinant.
+      // Trivial: el dependiente ya forma parte de su propio determinante.
       return false
     }
     if (primaryKeySet.has(dependent)) {
-      // A key column of the source table is never displaced.
+      // Una columna de la clave de la tabla de origen nunca se desplaza.
       return false
     }
 
@@ -285,7 +287,7 @@ export function normalizeTo3NF(input: NormalizationInput): NormalizedSchema {
     return true
   }
 
-  // 2NF: partial dependencies only exist when the key is composite.
+  // 2NF: las dependencias parciales solo existen cuando la clave es compuesta.
   if (primaryKey.length > 1) {
     for (const dependency of confirmedDependencies) {
       const decision = classify(dependency)
@@ -293,8 +295,8 @@ export function normalizeTo3NF(input: NormalizationInput): NormalizedSchema {
         case "partial":
           displace(decision.determinant, dependency.dependent)
           break
-        case "transitive": // handled in the 3NF pass below
-        case "full": // whole-key dependency: not a violation, stays put
+        case "transitive": // se maneja en la pasada de 3NF más abajo
+        case "full": // dependencia de clave completa: no es una violación, permanece igual
           break
         default: {
           const _never: never = decision
@@ -304,7 +306,7 @@ export function normalizeTo3NF(input: NormalizationInput): NormalizedSchema {
     }
   }
 
-  // 3NF: fixpoint loop, guarded against a non-terminating (cyclic) input.
+  // 3NF: bucle de punto fijo, protegido contra una entrada no terminante (cíclica).
   const maxRounds = confirmedDependencies.length + 1
   let converged = false
   for (let round = 0; round < maxRounds; round += 1) {
@@ -317,8 +319,8 @@ export function normalizeTo3NF(input: NormalizationInput): NormalizedSchema {
             changedInThisRound = true
           }
           break
-        case "partial": // already settled by the 2NF pass above
-        case "full": // whole-key dependency: not a violation, stays put
+        case "partial": // ya resuelto por la pasada de 2NF anterior
+        case "full": // dependencia de clave completa: no es una violación, permanece igual
           break
         default: {
           const _never: never = decision
@@ -378,10 +380,10 @@ export function normalizeTo3NF(input: NormalizationInput): NormalizedSchema {
 }
 
 /**
- * Defensive invariant: two tables must never reference each other. The
- * reciprocal-determinant merge above is what prevents this in practice; this
- * check exists so a regression fails loudly here instead of surfacing as a
- * silently broken schema downstream.
+ * Invariante defensiva: dos tablas nunca deben referenciarse mutuamente. La
+ * fusión de determinantes recíprocos de arriba es lo que evita esto en la práctica; esta
+ * verificación existe para que una regresión falle de forma ruidosa aquí en lugar de
+ * manifestarse como un esquema silenciosamente roto más adelante.
  */
 function assertNoForeignKeyCycles(tables: readonly NormalizedTable[]): void {
   const referencedTablesByName = new Map<string, ReadonlySet<string>>(

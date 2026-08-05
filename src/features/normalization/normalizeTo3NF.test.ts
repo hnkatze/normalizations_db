@@ -45,7 +45,7 @@ function findForeignKey(
   return foreignKeys.find((fk) => fk.referencesTable === referencesTable)
 }
 
-/** True when any two tables in the schema reference each other. */
+/** Verdadero cuando dos tablas cualesquiera del esquema se referencian mutuamente. */
 function hasTwoTableForeignKeyCycle(tables: readonly NormalizedTable[]): boolean {
   const referencedTablesByName = new Map<string, ReadonlySet<string>>(
     tables.map((table) => [table.name, new Set(table.foreignKeys.map((fk) => fk.referencesTable))]),
@@ -155,7 +155,7 @@ describe("normalizeTo3NF", () => {
   })
 
   it("decomposes a multi-level transitive chain by iterating to a fixpoint", () => {
-    // id -> x -> y -> z: three separate hops, none of them collapsible into one arrow.
+    // id -> x -> y -> z: tres saltos separados, ninguno de ellos reducible a una sola flecha.
     const table = buildTable("facts", ["id", "x", "y", "z"])
 
     const result = normalizeTo3NF({
@@ -329,8 +329,8 @@ describe("normalizeTo3NF", () => {
   })
 
   it("merges a reciprocal pair of determinants into one table instead of a two-table FK cycle", () => {
-    // customer_id and customer_email are alternate keys of the same entity:
-    // both {customer_id}->customer_email and {customer_email}->customer_id hold.
+    // customer_id y customer_email son claves alternativas de la misma entidad:
+    // tanto {customer_id}->customer_email como {customer_email}->customer_id se cumplen.
     const table = buildTable("orders", ["order_id", "customer_id", "customer_email"])
 
     const result = normalizeTo3NF({
@@ -344,7 +344,7 @@ describe("normalizeTo3NF", () => {
 
     expect(result.tables).toHaveLength(2)
 
-    // customer_id is declared before customer_email, so it is the surviving key.
+    // customer_id se declara antes que customer_email, así que es la clave que sobrevive.
     const customers = findTable(result.tables, "customer_id")
     expect(customers).toBeDefined()
     if (customers === undefined) return
@@ -368,8 +368,8 @@ describe("normalizeTo3NF", () => {
   })
 
   it("merges a chain of pairwise-reciprocal determinants into one table and stays acyclic", () => {
-    // a<->b and b<->c: three mutually-equivalent alternate keys, none of which
-    // reciprocates directly with the third.
+    // a<->b y b<->c: tres claves alternativas mutuamente equivalentes, ninguna de las cuales
+    // se relaciona recíprocamente de forma directa con la tercera.
     const table = buildTable("events", ["id", "a", "b", "c"])
 
     const result = normalizeTo3NF({
@@ -385,7 +385,7 @@ describe("normalizeTo3NF", () => {
 
     expect(result.tables).toHaveLength(2)
 
-    // "a" is declared first among {a, b, c}, so it is the surviving key.
+    // "a" se declara primero entre {a, b, c}, así que es la clave que sobrevive.
     const merged = findTable(result.tables, "a")
     expect(merged).toBeDefined()
     if (merged === undefined) return
