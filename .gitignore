@@ -39,3 +39,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.agents
+.atl
+.claude
+.kiro
+skills-lock.json
+context.md
+
+# Agent instruction files (kept locally, not published)
+CLAUDE.md
+AGENTS.md

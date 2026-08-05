@@ -1,0 +1,1 @@
+export { detectFunctionalDependencies } from "./detectFunctionalDependencies"
