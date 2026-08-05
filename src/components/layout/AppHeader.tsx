@@ -1,7 +1,7 @@
 export function AppHeader() {
   return (
     <header className="border-b border-border bg-card">
-      <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-5 sm:px-6">
+      <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-5 sm:px-6">
         <span className="font-heading text-lg font-semibold tracking-tight text-foreground">
           Normalize
         </span>
