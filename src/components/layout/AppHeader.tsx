@@ -6,7 +6,7 @@ export function AppHeader() {
           Normalize
         </span>
         <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
-          SQL 0NF<span aria-hidden="true"> &rarr; </span><span className="sr-only"> to </span>3NF
+          SQL 0FN<span aria-hidden="true"> &rarr; </span><span className="sr-only"> a </span>3FN
         </span>
       </div>
     </header>

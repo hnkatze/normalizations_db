@@ -64,25 +64,25 @@ export function DependencyReviewTable({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Detected dependencies in {tableName}</CardTitle>
+        <CardTitle>Dependencias detectadas en {tableName}</CardTitle>
         <CardDescription>
-          {detection.dependencies.length} functional dependencies found by
-          checking combinations of up to two columns against the uploaded
-          data. Detection is a heuristic over this sample — review the
-          evidence and confirm only the dependencies that reflect a real
-          business rule.
+          Se encontraron {detection.dependencies.length} dependencias
+          funcionales al comprobar combinaciones de hasta dos columnas frente
+          a los datos subidos. La detección es una heurística sobre esta
+          muestra: revisa la evidencia y confirma únicamente las
+          dependencias que reflejen una regla de negocio real.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <dl className="flex flex-wrap gap-x-6 gap-y-1.5 text-sm">
-          <DetectionStat label="Candidates inspected" value={detection.inspectedCandidates} />
-          <DetectionStat label="Skipped by pruning" value={detection.skippedByPruning} />
+          <DetectionStat label="Candidatos inspeccionados" value={detection.inspectedCandidates} />
+          <DetectionStat label="Omitidos por poda" value={detection.skippedByPruning} />
           <DetectionStat
-            label="Skipped by determinant limit"
+            label="Omitidos por límite de determinante"
             value={detection.skippedByDeterminantLimit}
           />
           <DetectionStat
-            label="Confirmed"
+            label="Confirmados"
             value={confirmedCount}
             total={detection.dependencies.length}
           />
@@ -90,26 +90,27 @@ export function DependencyReviewTable({
 
         {detection.dependencies.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No functional dependencies were detected in this sample.
+            No se detectaron dependencias funcionales en esta muestra.
           </p>
         ) : (
           <>
             <div className="overflow-x-auto">
               <Table>
                 <TableCaption>
-                  &ldquo;Vacuous&rdquo; means every determinant value in the sample is unique, so
-                  there was nothing to contradict the dependency. For a full primary key that is
-                  expected and does not mean the dependency is wrong. Sorted strongest evidence
-                  first; vacuous dependencies sort last.
+                  &laquo;Vacua&raquo; significa que todos los valores del determinante en la
+                  muestra son únicos, por lo que no hubo nada que contradijera la dependencia.
+                  Para una clave primaria completa esto es esperable y no significa que la
+                  dependencia sea incorrecta. Ordenadas de mayor a menor evidencia; las
+                  dependencias vacuas se muestran al final.
                 </TableCaption>
                 <TableHeader>
                   <TableRow>
-                    <TableHead scope="col">Confirm</TableHead>
-                    <TableHead scope="col">Dependency</TableHead>
-                    <TableHead scope="col">Groups</TableHead>
-                    <TableHead scope="col">Rows</TableHead>
-                    <TableHead scope="col">Largest group</TableHead>
-                    <TableHead scope="col">Vacuous</TableHead>
+                    <TableHead scope="col">Confirmar</TableHead>
+                    <TableHead scope="col">Dependencia</TableHead>
+                    <TableHead scope="col">Grupos</TableHead>
+                    <TableHead scope="col">Filas</TableHead>
+                    <TableHead scope="col">Grupo más grande</TableHead>
+                    <TableHead scope="col">Vacua</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

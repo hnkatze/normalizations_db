@@ -27,13 +27,13 @@ export function DependencyRow({ dependency, confirmed, onToggleConfirm }: Depend
           onCheckedChange={() => onToggleConfirm(dependency)}
         />
         <Label htmlFor={checkboxId} className="sr-only">
-          Confirm that {determinantLabel} determines {dependency.dependent}
+          Confirmar que {determinantLabel} determina {dependency.dependent}
         </Label>
       </TableCell>
       <TableCell className="font-mono text-xs">
         {determinantLabel}
         <span aria-hidden="true"> &rarr; </span>
-        <span className="sr-only"> determines </span>
+        <span className="sr-only"> determina </span>
         {dependency.dependent}
       </TableCell>
       <TableCell>{dependency.evidence.groupCount}</TableCell>
@@ -41,7 +41,7 @@ export function DependencyRow({ dependency, confirmed, onToggleConfirm }: Depend
       <TableCell>{dependency.evidence.maxGroupSize}</TableCell>
       <TableCell>
         {vacuous ? (
-          <Badge variant="outline">Vacuous</Badge>
+          <Badge variant="outline">Vacua</Badge>
         ) : (
           <span aria-hidden="true" className="text-muted-foreground">
             &mdash;

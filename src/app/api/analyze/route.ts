@@ -30,24 +30,24 @@ function jsonResponse(payload: AnalyzeSqlResponse, status: number): Response {
 function describeStagingError(error: StagingError): { readonly message: string; readonly status: number } {
   switch (error.kind) {
     case "connection-failed":
-      return { message: "Could not reach the database. Please try again in a moment.", status: 502 }
+      return { message: "No se pudo conectar con la base de datos. Inténtalo de nuevo en un momento.", status: 502 }
     case "script-execution-failed":
       return {
-        message: "The script has a syntax error or failed to run. Check the SQL and try again.",
+        message: "El script tiene un error de sintaxis o no se pudo ejecutar. Revisa el SQL e inténtalo de nuevo.",
         status: 422,
       }
     case "no-table-created":
       return {
-        message: "The script created no table. Make sure it contains a CREATE TABLE statement.",
+        message: "El script no creó ninguna tabla. Asegúrate de que contenga una sentencia CREATE TABLE.",
         status: 422,
       }
     case "ambiguous-table":
       return {
-        message: `The script created ${error.tableNames.length} tables; only a single flat table is supported.`,
+        message: `El script creó ${error.tableNames.length} tablas; solo se admite una única tabla plana.`,
         status: 422,
       }
     case "read-failed":
-      return { message: "The table was created but its rows could not be read.", status: 502 }
+      return { message: "La tabla se creó, pero no se pudieron leer sus filas.", status: 502 }
     default: {
       const unhandled: never = error
       throw new Error(`unhandled StagingError variant: ${JSON.stringify(unhandled)}`)
@@ -60,7 +60,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!databaseUrlResult.ok) {
     console.error("DATABASE_URL is not usable:", databaseUrlResult.error.kind)
     return jsonResponse(
-      { ok: false, message: "The server is not configured with a database connection." },
+      { ok: false, message: "El servidor no tiene configurada una conexión a la base de datos." },
       500,
     )
   }
@@ -70,7 +70,7 @@ export async function POST(request: Request): Promise<Response> {
     // Protege contra que la constante de arriba se desvíe de la lista
     // permitida, no contra nada que el llamador controle.
     console.error("staging schema name constant is invalid:", schemaResult.error.reason)
-    return jsonResponse({ ok: false, message: "Internal server configuration error." }, 500)
+    return jsonResponse({ ok: false, message: "Error interno de configuración del servidor." }, 500)
   }
 
   let sql: string
@@ -78,12 +78,12 @@ export async function POST(request: Request): Promise<Response> {
     const formData = await request.formData()
     const fileEntry = formData.get(ANALYZE_FILE_FIELD)
     if (!(fileEntry instanceof File)) {
-      return jsonResponse({ ok: false, message: "No SQL file was uploaded." }, 400)
+      return jsonResponse({ ok: false, message: "No se subió ningún archivo SQL." }, 400)
     }
     sql = await fileEntry.text()
   } catch (e) {
     console.error("failed to read the uploaded form data:", e)
-    return jsonResponse({ ok: false, message: "The uploaded file could not be read." }, 400)
+    return jsonResponse({ ok: false, message: "No se pudo leer el archivo subido." }, 400)
   }
 
   const port = createPgStagingAdapter(databaseUrlResult.value)
@@ -109,7 +109,7 @@ export async function POST(request: Request): Promise<Response> {
   } catch (e) {
     console.error("unexpected error while analyzing the uploaded file:", e)
     return jsonResponse(
-      { ok: false, message: "Something went wrong while analyzing the file." },
+      { ok: false, message: "Ocurrió un error inesperado al analizar el archivo." },
       500,
     )
   } finally {

@@ -19,9 +19,9 @@ export function PrimaryKeySelector({ columns, selected, onToggle }: PrimaryKeySe
 
   return (
     <fieldset className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4 ring-1 ring-foreground/5">
-      <legend className="px-1 text-sm font-medium text-foreground">Primary key</legend>
+      <legend className="px-1 text-sm font-medium text-foreground">Clave primaria</legend>
       <p className="text-xs text-muted-foreground">
-        Choose the column or columns that uniquely identify a row.
+        Elige la columna o columnas que identifican de forma única una fila.
       </p>
       <div className="flex flex-col gap-2 pt-1">
         {columns.map((column) => {

@@ -46,17 +46,17 @@ export function AnalyzeAction({
               focusable="false"
               className="size-4 motion-safe:animate-spin"
             />
-            Analyzing…
+            Analizando…
           </>
         ) : (
-          "Analyze"
+          "Analizar"
         )}
       </Button>
 
       <div aria-live="polite" className="min-h-5">
         {analysisState.status === "analyzing" ? (
           <p id={ANALYSIS_STATUS_ID} className="text-sm text-muted-foreground">
-            Analyzing your file…
+            Analizando tu archivo…
           </p>
         ) : analysisState.status === "error" ? (
           <p id={ANALYSIS_STATUS_ID} className="text-sm text-destructive">
@@ -64,8 +64,8 @@ export function AnalyzeAction({
           </p>
         ) : analysisState.status === "ok" ? (
           <p id={ANALYSIS_STATUS_ID} className="text-sm text-foreground">
-            Analysis complete — {analysisState.response.detection.dependencies.length}{" "}
-            dependencies found.
+            Análisis completo: se encontraron{" "}
+            {analysisState.response.detection.dependencies.length} dependencias.
           </p>
         ) : (
           <p id={ANALYSIS_STATUS_ID} />

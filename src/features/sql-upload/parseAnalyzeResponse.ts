@@ -15,7 +15,7 @@ import type { AnalyzedTable, AnalyzeSqlResponse } from "./analyzeContract"
 export function parseAnalyzeResponse(value: unknown): AnalyzeSqlResponse {
   const fallback: AnalyzeSqlResponse = {
     ok: false,
-    message: "The server returned an unexpected response.",
+    message: "El servidor devolvió una respuesta inesperada.",
   }
 
   if (!isRecord(value) || typeof value.ok !== "boolean") {

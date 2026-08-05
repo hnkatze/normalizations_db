@@ -20,8 +20,8 @@ export function PrimaryKeySuggestion({ suggestion, onApply }: PrimaryKeySuggesti
   if (suggestion.kind === "none") {
     return (
       <p className="text-xs text-muted-foreground">
-        No column or column combination was unique across every row, so no primary key can be
-        suggested from the data alone.
+        Ninguna columna ni combinación de columnas fue única en todas las filas, por lo que no
+        se puede sugerir una clave primaria únicamente a partir de los datos.
       </p>
     )
   }
@@ -34,9 +34,9 @@ export function PrimaryKeySuggestion({ suggestion, onApply }: PrimaryKeySuggesti
           focusable="false"
           className="mr-1 inline size-3.5 align-text-bottom text-foreground"
         />
-        <span className="font-medium text-foreground">Suggested from the data:</span>{" "}
-        <span className="font-mono">{suggestion.columns.join(", ")}</span> is unique across every
-        row.
+        <span className="font-medium text-foreground">Sugerida a partir de los datos:</span>{" "}
+        <span className="font-mono">{suggestion.columns.join(", ")}</span> es única en todas las
+        filas.
       </p>
       <Button
         type="button"
@@ -44,7 +44,7 @@ export function PrimaryKeySuggestion({ suggestion, onApply }: PrimaryKeySuggesti
         size="xs"
         onClick={() => onApply(suggestion.columns)}
       >
-        Use {suggestion.columns.join(", ")} as primary key
+        Usar {suggestion.columns.join(", ")} como clave primaria
       </Button>
     </div>
   )

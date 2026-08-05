@@ -7,8 +7,8 @@ describe("buildNormalizationGates", () => {
     const gates = buildNormalizationGates([], 0, 70)
 
     expect(gates).toEqual([
-      { label: "Primary key", satisfied: false, detail: "Not chosen yet" },
-      { label: "Confirmed dependencies", satisfied: false, detail: "0 of 70 confirmed" },
+      { label: "Clave primaria", satisfied: false, detail: "Aún no elegida" },
+      { label: "Dependencias confirmadas", satisfied: false, detail: "0 de 70 confirmadas" },
     ])
   })
 
@@ -16,9 +16,9 @@ describe("buildNormalizationGates", () => {
     const gates = buildNormalizationGates(["venta_id", "producto_id"], 0, 70)
 
     expect(gates[0]).toEqual({
-      label: "Primary key",
+      label: "Clave primaria",
       satisfied: true,
-      detail: "Chosen: venta_id, producto_id",
+      detail: "Elegida: venta_id, producto_id",
     })
   })
 
@@ -26,9 +26,9 @@ describe("buildNormalizationGates", () => {
     const gates = buildNormalizationGates(["id"], 3, 70)
 
     expect(gates[1]).toEqual({
-      label: "Confirmed dependencies",
+      label: "Dependencias confirmadas",
       satisfied: true,
-      detail: "3 of 70 confirmed",
+      detail: "3 de 70 confirmadas",
     })
   })
 })

@@ -13,15 +13,15 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SQL Normalizer",
+  title: "Normalizador SQL",
   description:
-    "Upload a flat, unnormalized SQL seed and automatically detect functional dependencies, generate 3NF tables, and migrate your data.",
+    "Sube una semilla SQL plana y sin normalizar para detectar automáticamente las dependencias funcionales, generar tablas en 3FN y migrar tus datos.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
-      lang="en"
+      lang="es"
       className={`${plusJakartaSans.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
@@ -29,7 +29,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           href="#main-content"
           className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground"
         >
-          Skip to content
+          Saltar al contenido
         </a>
         {children}
       </body>

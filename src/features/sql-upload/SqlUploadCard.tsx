@@ -100,7 +100,7 @@ export function SqlUploadCard({
     }
 
     if (!file.name.toLowerCase().endsWith(".sql")) {
-      setDropError("Only .sql files are supported.")
+      setDropError("Solo se admiten archivos .sql.")
       return
     }
 
@@ -113,10 +113,10 @@ export function SqlUploadCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Upload your SQL seed</CardTitle>
+        <CardTitle>Sube tu archivo semilla SQL</CardTitle>
         <CardDescription>
-          Pick a .sql file to detect functional dependencies and generate a
-          normalized schema.
+          Selecciona un archivo .sql para detectar dependencias funcionales y
+          generar un esquema normalizado.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
@@ -128,10 +128,11 @@ export function SqlUploadCard({
               className="mt-0.5 size-4 shrink-0 text-muted-foreground"
             />
             <div className="flex flex-col gap-0.5">
-              <p className="font-medium text-foreground">One table per file</p>
+              <p className="font-medium text-foreground">Una tabla por archivo</p>
               <p className="text-muted-foreground">
-                The seed must contain a single flat, unnormalized table.
-                Multi-table schemas are not supported yet.
+                La semilla debe contener una única tabla plana y no
+                normalizada. Los esquemas con varias tablas todavía no son
+                compatibles.
               </p>
             </div>
           </div>
@@ -139,7 +140,7 @@ export function SqlUploadCard({
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="sql-file-input" id={SQL_FILE_LABEL_ID}>
-            SQL file
+            Archivo SQL
           </Label>
           <div
             onDragOver={handleDragOver}
@@ -161,10 +162,10 @@ export function SqlUploadCard({
                 id={DROP_ZONE_LABEL_ID}
                 className="text-sm font-medium text-foreground"
               >
-                Drop your .sql file here
+                Suelta aquí tu archivo .sql
               </span>
               <span className="text-xs text-muted-foreground">
-                or click to browse
+                o haz clic para buscar
               </span>
             </div>
             <Input
@@ -211,12 +212,12 @@ export function SqlUploadCard({
                 onClick={handleClearClick}
               >
                 <XIcon aria-hidden="true" focusable="false" />
-                <span className="sr-only">Clear selected file</span>
+                <span className="sr-only">Quitar archivo seleccionado</span>
               </Button>
             </div>
           ) : (
             <p id={FILE_STATUS_ID} className="text-sm text-muted-foreground">
-              No file selected yet.
+              Todavía no se ha seleccionado ningún archivo.
             </p>
           )}
         </div>

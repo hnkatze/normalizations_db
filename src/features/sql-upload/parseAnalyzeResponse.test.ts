@@ -30,14 +30,14 @@ describe("parseAnalyzeResponse", () => {
     // explícitamente los arrays o esto pasaría como si fuera un objeto válido.
     expect(parseAnalyzeResponse([1, 2, 3])).toEqual({
       ok: false,
-      message: "The server returned an unexpected response.",
+      message: "El servidor devolvió una respuesta inesperada.",
     })
   })
 
   it("falls back to a generic failure for null", () => {
     expect(parseAnalyzeResponse(null)).toEqual({
       ok: false,
-      message: "The server returned an unexpected response.",
+      message: "El servidor devolvió una respuesta inesperada.",
     })
   })
 })

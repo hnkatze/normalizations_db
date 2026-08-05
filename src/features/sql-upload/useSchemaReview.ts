@@ -42,7 +42,7 @@ export function useSchemaReview(): SchemaReview {
     // Las casillas de PrimaryKeySelector se marcan en silencio para un
     // usuario de lector de pantalla: esta es la única retroalimentación de
     // que la acción realmente hizo algo.
-    setPrimaryKeyAnnouncement(`Primary key set to ${columns.join(", ")}.`)
+    setPrimaryKeyAnnouncement(`Clave primaria establecida en ${columns.join(", ")}.`)
   }
 
   function toggleConfirmedDependency(dependency: FunctionalDependency) {

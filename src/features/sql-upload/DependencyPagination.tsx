@@ -36,7 +36,7 @@ export function DependencyPagination({ pageNumber, pageCount, onPageChange }: De
   }
 
   return (
-    <nav aria-label="Dependency table pages" className="flex items-center justify-between gap-3">
+    <nav aria-label="Páginas de la tabla de dependencias" className="flex items-center justify-between gap-3">
       <Button
         type="button"
         variant="outline"
@@ -46,12 +46,12 @@ export function DependencyPagination({ pageNumber, pageCount, onPageChange }: De
         className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
       >
         <ChevronLeftIcon aria-hidden="true" focusable="false" />
-        Previous
+        Anterior
       </Button>
 
       <div aria-live="polite" className="min-h-5">
         <p id={PAGE_STATUS_ID} className="text-sm text-muted-foreground">
-          Page {pageNumber} of {pageCount}
+          Página {pageNumber} de {pageCount}
         </p>
       </div>
 
@@ -63,7 +63,7 @@ export function DependencyPagination({ pageNumber, pageCount, onPageChange }: De
         onClick={handleNext}
         className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
       >
-        Next
+        Siguiente
         <ChevronRightIcon aria-hidden="true" focusable="false" />
       </Button>
     </nav>

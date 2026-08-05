@@ -83,10 +83,10 @@ export function SqlUploadContainer() {
         setAnalysisState({ status: "error", message: result.message })
       }
     } catch (e) {
-      const detail = e instanceof Error ? e.message : "unknown network error"
+      const detail = e instanceof Error ? e.message : "error de red desconocido"
       setAnalysisState({
         status: "error",
-        message: `Could not reach the server: ${detail}`,
+        message: `No se pudo conectar con el servidor: ${detail}`,
       })
     }
   }
@@ -99,7 +99,7 @@ export function SqlUploadContainer() {
           tabIndex={-1}
           className="font-heading text-lg font-semibold tracking-tight text-foreground"
         >
-          Results for {analysisState.response.table.name}
+          Resultados de {analysisState.response.table.name}
         </h2>
       ) : null}
 

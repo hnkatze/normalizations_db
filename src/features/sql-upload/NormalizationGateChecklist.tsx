@@ -36,7 +36,7 @@ function useGateFlipAnnouncement(gates: readonly NormalizationGate[]): string {
 
     if (flipped.length > 0) {
       const message = flipped
-        .map((gate) => `${gate.label} ${gate.satisfied ? "requirement met." : "requirement no longer met."}`)
+        .map((gate) => `${gate.label} ${gate.satisfied ? "requisito cumplido." : "requisito ya no se cumple."}`)
         .join(" ")
       setState({ gates, message })
     } else {

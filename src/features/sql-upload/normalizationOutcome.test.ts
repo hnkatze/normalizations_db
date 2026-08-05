@@ -27,7 +27,7 @@ describe("computeNormalizationOutcome", () => {
 
     expect(outcome).toEqual({
       kind: "empty",
-      reason: "Choose at least one primary key column to see the normalized schema.",
+      reason: "Elija al menos una columna de clave primaria para ver el esquema normalizado.",
     })
   })
 
@@ -36,7 +36,7 @@ describe("computeNormalizationOutcome", () => {
 
     expect(outcome).toEqual({
       kind: "empty",
-      reason: "Confirm at least one functional dependency to see the normalized schema.",
+      reason: "Confirme al menos una dependencia funcional para ver el esquema normalizado.",
     })
   })
 

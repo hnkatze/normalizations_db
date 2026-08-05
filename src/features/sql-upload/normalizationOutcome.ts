@@ -24,13 +24,13 @@ export function computeNormalizationOutcome(input: NormalizationInput): Normaliz
   if (input.primaryKey.length === 0) {
     return {
       kind: "empty",
-      reason: "Choose at least one primary key column to see the normalized schema.",
+      reason: "Elija al menos una columna de clave primaria para ver el esquema normalizado.",
     }
   }
   if (input.confirmedDependencies.length === 0) {
     return {
       kind: "empty",
-      reason: "Confirm at least one functional dependency to see the normalized schema.",
+      reason: "Confirme al menos una dependencia funcional para ver el esquema normalizado.",
     }
   }
 
@@ -38,7 +38,7 @@ export function computeNormalizationOutcome(input: NormalizationInput): Normaliz
     const schema = normalizeTo3NF(input)
     return { kind: "ready", schema, ddl: generateDdl(schema) }
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Could not normalize this schema."
+    const message = e instanceof Error ? e.message : "No se pudo normalizar este esquema."
     return { kind: "error", message }
   }
 }

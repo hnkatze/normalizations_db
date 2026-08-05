@@ -19,14 +19,14 @@ export function buildNormalizationGates(
 ): readonly NormalizationGate[] {
   return [
     {
-      label: "Primary key",
+      label: "Clave primaria",
       satisfied: primaryKey.length > 0,
-      detail: primaryKey.length > 0 ? `Chosen: ${primaryKey.join(", ")}` : "Not chosen yet",
+      detail: primaryKey.length > 0 ? `Elegida: ${primaryKey.join(", ")}` : "Aún no elegida",
     },
     {
-      label: "Confirmed dependencies",
+      label: "Dependencias confirmadas",
       satisfied: confirmedDependencyCount > 0,
-      detail: `${confirmedDependencyCount} of ${totalDependencyCount} confirmed`,
+      detail: `${confirmedDependencyCount} de ${totalDependencyCount} confirmadas`,
     },
   ]
 }
