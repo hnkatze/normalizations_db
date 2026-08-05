@@ -3,13 +3,13 @@ import type { ColumnDefinition } from "@/domain"
 import { isRecord } from "./isRecord"
 
 /**
- * Maps `information_schema.columns` rows into the domain `ColumnDefinition`
- * shape.
+ * Mapea filas de `information_schema.columns` a la forma `ColumnDefinition`
+ * del dominio.
  *
- * The query producing these rows is authored by this adapter, not by the
- * uploaded script, so a shape mismatch here is a driver/schema assumption
- * bug rather than a user-triggered failure — hence throwing an invariant
- * violation instead of returning a `Result` error variant.
+ * La consulta que produce estas filas es escrita por este adaptador, no por el
+ * script subido, así que una discrepancia de forma aquí es un error de suposición
+ * sobre el driver/esquema y no un fallo provocado por el usuario — de ahí que se lance
+ * una violación de invariante en lugar de devolver una variante de error `Result`.
  */
 export function mapInformationSchemaColumns(rows: readonly unknown[]): readonly ColumnDefinition[] {
   return rows.map((row, index) => {

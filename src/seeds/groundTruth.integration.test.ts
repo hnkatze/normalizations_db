@@ -9,13 +9,14 @@ import {
 } from "./ventasRawFixture"
 
 /**
- * Cross-validation between two independently built units: the detection engine
- * and the answer key. They were written against the shared domain contract
- * without either one seeing the other's code, so this is the only place that
- * proves they actually compose.
+ * Validación cruzada entre dos unidades construidas de forma independiente: el
+ * motor de detección y la clave de respuestas. Se escribieron contra el
+ * contrato de dominio compartido sin que ninguno viera el código del otro, así
+ * que este es el único lugar que demuestra que realmente componen.
  *
- * If this file fails, one of two things is true: the detector regressed, or the
- * seed stopped encoding the dependencies it claims to encode. Both are serious.
+ * Si este archivo falla, una de dos cosas es cierta: el detector regresó, o el
+ * seed dejó de codificar las dependencias que afirma codificar. Ambas son
+ * graves.
  */
 
 const MAX_DETERMINANT_SIZE = 2
@@ -74,10 +75,11 @@ describe("detection engine against the reference dataset", () => {
   })
 
   it("reports vacuous evidence for exactly the full-key dependencies", () => {
-    // A primary key is unique by definition, so every one of its groups holds a
-    // single row and `isVacuous` is necessarily true. That is expected, not
-    // noise — see the TRAP note on `isVacuous`. Any OTHER vacuous dependency in
-    // the answer key would mean the seed lacks the repetition it needs.
+    // Una clave primaria es única por definición, así que cada uno de sus
+    // grupos contiene una sola fila y `isVacuous` es necesariamente verdadero.
+    // Eso es esperado, no ruido — ver la nota TRAP sobre `isVacuous`. Cualquier
+    // OTRA dependencia vacua en la clave de respuestas significaría que al
+    // seed le falta la repetición que necesita.
     const vacuousKinds = expectedDependencies
       .filter((expected) => {
         const found = findDetected(
@@ -98,8 +100,9 @@ describe("detection engine against the reference dataset", () => {
   })
 
   it("keeps the candidate space bounded by the determinant limit", () => {
-    // 15 columns. An unbounded search is 2^15 determinant subsets, each needing
-    // a pass over the rows; the cap is what makes this terminate at all.
+    // 15 columnas. Una búsqueda sin límite son 2^15 subconjuntos determinantes,
+    // cada uno necesitando una pasada sobre las filas; el límite es lo único
+    // que hace que esto termine.
     expect(result.inspectedCandidates).toBeLessThan(3000)
     expect(result.skippedByDeterminantLimit).toBeGreaterThan(0)
   })

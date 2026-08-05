@@ -16,9 +16,10 @@ export function formatFileSize(sizeBytes: number): string {
   const decimals = exponent === 0 ? 0 : 1
   let rounded = Number(value.toFixed(decimals))
 
-  // Rounding at display precision can push the value up to the next unit's
-  // boundary (e.g. 1023.9990234375 KB rounds to "1024.0 KB"). Re-check and
-  // bump the unit so the displayed number never reaches 1024.
+  // Redondear a la precisión de visualización puede empujar el valor hasta
+  // el límite de la siguiente unidad (por ejemplo, 1023.9990234375 KB
+  // redondea a "1024.0 KB"). Se vuelve a comprobar y se sube de unidad para
+  // que el número mostrado nunca llegue a 1024.
   if (rounded >= 1024 && exponent < BYTE_UNITS.length - 1) {
     exponent += 1
     rounded = Number((rounded / 1024).toFixed(1))

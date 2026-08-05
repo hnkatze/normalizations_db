@@ -1,26 +1,28 @@
 /**
- * Functional dependency detection over an observed, in-memory table.
+ * Detección de dependencias funcionales sobre una tabla observada, en memoria.
  *
- * The candidate determinant space is the power set of columns (2^N). Two
- * guards keep this tractable, both required by `DetectionOptions` /
- * `DetectionResult`:
+ * El espacio de determinantes candidatos es el conjunto potencia de las
+ * columnas (2^N). Dos resguardos mantienen esto manejable, ambos requeridos
+ * por `DetectionOptions` / `DetectionResult`:
  *
- * 1. `options.maxDeterminantSize` bounds how wide a determinant may be.
- *    Candidates beyond that width are never generated; their count is
- *    computed combinatorially in `countSkippedByDeterminantLimit` rather than
- *    enumerated, which would defeat the purpose of the guard.
- * 2. Minimality pruning: once `A -> Y` is confirmed, any `{A, ...} -> Y` is
- *    implied by augmentation and carries no new information, so it is never
- *    evaluated. Determinant sizes are searched smallest-first so a pruning
- *    candidate is always already known by the time a larger superset is
- *    reached.
+ * 1. `options.maxDeterminantSize` acota qué tan ancho puede ser un
+ *    determinante. Los candidatos que superan ese ancho nunca se generan; su
+ *    cantidad se calcula de forma combinatoria en
+ *    `countSkippedByDeterminantLimit` en lugar de enumerarse, lo cual
+ *    anularía el propósito del resguardo.
+ * 2. Poda por minimalidad: una vez que `A -> Y` está confirmada, cualquier
+ *    `{A, ...} -> Y` queda implicada por aumento y no aporta información
+ *    nueva, por lo que nunca se evalúa. Los tamaños de determinante se
+ *    recorren de menor a mayor, de modo que un candidato de poda ya sea
+ *    conocido para cuando se alcanza un superconjunto más grande.
  *
- * NULL handling: two rows are grouped together when every determinant column
- * value is either strictly equal or both NULL. This mirrors SQL's `GROUP BY`
- * / `DISTINCT` semantics (NULLs collapse into one group) rather than SQL's
- * three-valued equality (`NULL <> NULL`), which would make every NULL row a
- * singleton group. The grouping choice matters here because it decides
- * whether NULL-valued rows can ever contradict each other.
+ * Manejo de NULL: dos filas se agrupan juntas cuando cada valor de columna
+ * del determinante es estrictamente igual o ambos son NULL. Esto refleja la
+ * semántica de `GROUP BY` / `DISTINCT` de SQL (los NULL colapsan en un solo
+ * grupo) en lugar de la igualdad de tres valores de SQL (`NULL <> NULL`), que
+ * haría que cada fila NULL fuera un grupo unitario. Esta elección de
+ * agrupamiento importa aquí porque determina si las filas con valor NULL
+ * pueden llegar a contradecirse entre sí.
  */
 
 import type {
@@ -34,16 +36,17 @@ import type {
 } from "@/domain"
 import { columnNamesOf } from "@/domain"
 
-/** Reads a cell defensively: a row missing the column is treated as NULL. */
+/** Lee una celda de forma defensiva: una fila que carece de la columna se trata como NULL. */
 function cellValueOf(row: Row, column: ColumnName): CellValue {
   const value: CellValue | undefined = row[column]
   return value ?? null
 }
 
 /**
- * Builds the grouping key for a determinant tuple. NULLs serialize to the
- * literal `"null"`, so every NULL-valued row for a given determinant lands in
- * the same group (see the NULL handling note above).
+ * Construye la clave de agrupamiento para una tupla determinante. Los NULL se
+ * serializan al literal `"null"`, de modo que toda fila con valor NULL para
+ * un determinante dado cae en el mismo grupo (ver la nota de manejo de NULL
+ * más arriba).
  */
 function determinantKey(row: Row, determinant: readonly ColumnName[]): string {
   const values = determinant.map((column) => cellValueOf(row, column))
@@ -59,7 +62,7 @@ type DependencyEvaluation =
       readonly maxGroupSize: number
     }
 
-/** Groups rows by the determinant tuple and checks the dependent is constant per group. */
+/** Agrupa las filas por la tupla determinante y verifica que el dependiente sea constante en cada grupo. */
 function evaluateDependency(
   rows: readonly Row[],
   determinant: readonly ColumnName[],
@@ -74,8 +77,8 @@ function evaluateDependency(
     const firstValue = firstValueByGroup.get(key)
 
     if (firstValue === undefined) {
-      // Map#get on a Map<string, CellValue> only returns undefined when the
-      // key is absent, since CellValue itself never includes undefined.
+      // Map#get sobre un Map<string, CellValue> solo retorna undefined cuando
+      // la clave está ausente, ya que CellValue en sí nunca incluye undefined.
       firstValueByGroup.set(key, dependentValue)
       sizeByGroup.set(key, 1)
       continue
@@ -103,7 +106,7 @@ function evaluateDependency(
   }
 }
 
-/** All k-combinations of `columns`, preserving the original column order. */
+/** Todas las k-combinaciones de `columns`, preservando el orden original de columnas. */
 function combinationsOfSize(
   columns: readonly ColumnName[],
   size: number,
@@ -129,12 +132,12 @@ function combinationsOfSize(
   return result
 }
 
-/** True when every element of `smaller` also appears in `larger`. */
+/** Verdadero cuando cada elemento de `smaller` también aparece en `larger`. */
 function isSubsetOf(smaller: readonly ColumnName[], larger: readonly ColumnName[]): boolean {
   return smaller.every((column) => larger.includes(column))
 }
 
-/** `C(n, k)`, the number of k-combinations of n items. */
+/** `C(n, k)`, el número de k-combinaciones de n elementos. */
 function binomialCoefficient(itemCount: number, chooseCount: number): number {
   if (chooseCount < 0 || chooseCount > itemCount) {
     return 0
@@ -148,10 +151,11 @@ function binomialCoefficient(itemCount: number, chooseCount: number): number {
 }
 
 /**
- * Counts determinant/dependent pairs never generated because their
- * determinant width exceeds `maxDeterminantSize`, without enumerating them.
- * A determinant of the full column count leaves no column for a dependent,
- * so widths only go up to `columnCount - 1`.
+ * Cuenta los pares determinante/dependiente que nunca se generan porque el
+ * ancho de su determinante excede `maxDeterminantSize`, sin enumerarlos.
+ * Un determinante con la cantidad total de columnas no deja ninguna columna
+ * disponible para un dependiente, por lo que los anchos solo llegan hasta
+ * `columnCount - 1`.
  */
 function countSkippedByDeterminantLimit(columnCount: number, maxDeterminantSize: number): number {
   let skipped = 0
@@ -162,11 +166,12 @@ function countSkippedByDeterminantLimit(columnCount: number, maxDeterminantSize:
 }
 
 /**
- * Detects minimal, non-trivial functional dependencies observed in `table`.
+ * Detecta dependencias funcionales mínimas y no triviales observadas en `table`.
  *
- * Only dependencies that hold across every row of the sample are reported,
- * each paired with the evidence that produced it (`FdEvidence`) so a human
- * reviewer can judge a heuristic result rather than trust it blindly.
+ * Solo se reportan las dependencias que se cumplen en todas las filas de la
+ * muestra, cada una emparejada con la evidencia que la produjo (`FdEvidence`)
+ * para que un revisor humano pueda juzgar un resultado heurístico en lugar de
+ * confiar en él ciegamente.
  */
 export function detectFunctionalDependencies(
   table: FlatTable,
@@ -176,8 +181,9 @@ export function detectFunctionalDependencies(
   const columnCount = allColumns.length
 
   if (columnCount < 2 || table.rows.length === 0) {
-    // Fewer than two columns: no room for a determinant plus a dependent.
-    // No rows: there is no evidence to evaluate any candidate against.
+    // Menos de dos columnas: no hay espacio para un determinante más un
+    // dependiente. Sin filas: no hay evidencia contra la cual evaluar ningún
+    // candidato.
     return {
       dependencies: [],
       inspectedCandidates: 0,
@@ -217,9 +223,10 @@ export function detectFunctionalDependencies(
           continue
         }
 
-        // Computed explicitly (not assumed) even though the dependent-candidate
-        // filter above already excludes determinant members: this is the
-        // honest source of truth the evidence contract asks for.
+        // Se calcula explícitamente (no se asume) aunque el filtro de
+        // candidatos dependientes de arriba ya excluye a los miembros del
+        // determinante: esta es la fuente de verdad honesta que exige el
+        // contrato de evidencia.
         const isTrivial = determinant.includes(dependent)
 
         dependencies.push({

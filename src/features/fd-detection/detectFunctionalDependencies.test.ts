@@ -55,7 +55,7 @@ describe("detectFunctionalDependencies", () => {
       [
         { department: "sales", manager: "carol" },
         { department: "sales", manager: "carol" },
-        { department: "sales", manager: "dave" }, // breaks department -> manager
+        { department: "sales", manager: "dave" }, // rompe department -> manager
         { department: "eng", manager: "erin" },
       ],
     )
@@ -127,7 +127,7 @@ describe("detectFunctionalDependencies", () => {
       [textColumn("region", true), textColumn("city")],
       [
         { region: null, city: "unknown" },
-        { region: null, city: "other" }, // same NULL group, different city
+        { region: null, city: "other" }, // mismo grupo NULL, distinta city
         { region: "north", city: "asgard" },
       ],
     )
@@ -142,8 +142,8 @@ describe("detectFunctionalDependencies", () => {
       [textColumn("courseId"), textColumn("semester"), textColumn("room")],
       [
         { courseId: "cs101", semester: "fall", room: "a1" },
-        { courseId: "cs101", semester: "spring", room: "b2" }, // same course, different room
-        { courseId: "cs102", semester: "fall", room: "b2" }, // same semester, different room
+        { courseId: "cs101", semester: "spring", room: "b2" }, // mismo curso, distinto room
+        { courseId: "cs102", semester: "fall", room: "b2" }, // mismo semester, distinto room
         { courseId: "cs102", semester: "spring", room: "c3" },
       ],
     )
@@ -176,12 +176,12 @@ describe("detectFunctionalDependencies", () => {
 
     const result = detectFunctionalDependencies(table, { maxDeterminantSize: 2 })
 
-    // {a} -> c holds, and {c} -> a holds; both are minimal, size-1 dependencies.
+    // {a} -> c se cumple, y {c} -> a se cumple; ambas son dependencias mínimas de tamaño 1.
     expect(findDependency(result.dependencies, ["a"], "c")).toBeDefined()
     expect(findDependency(result.dependencies, ["c"], "a")).toBeDefined()
 
-    // {a, b} -> c and {b, c} -> a would hold too, but only by augmentation of an
-    // already-confirmed smaller determinant, so they must not be reported.
+    // {a, b} -> c y {b, c} -> a también se cumplirían, pero solo por aumento de un
+    // determinante más pequeño ya confirmado, por lo que no deben reportarse.
     expect(findDependency(result.dependencies, ["a", "b"], "c")).toBeUndefined()
     expect(findDependency(result.dependencies, ["b", "c"], "a")).toBeUndefined()
     expect(result.dependencies.every((dependency) => dependency.determinant.length === 1)).toBe(
@@ -204,7 +204,7 @@ describe("detectFunctionalDependencies", () => {
 
     const result = detectFunctionalDependencies(table, { maxDeterminantSize: 1 })
 
-    // Sizes 2 and 3 are never generated: C(4,2)*2 + C(4,3)*1 = 12 + 4 = 16.
+    // Los tamaños 2 y 3 nunca se generan: C(4,2)*2 + C(4,3)*1 = 12 + 4 = 16.
     expect(result.skippedByDeterminantLimit).toBe(16)
     expect(result.dependencies.every((dependency) => dependency.determinant.length === 1)).toBe(
       true,

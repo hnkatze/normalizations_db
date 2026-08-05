@@ -1,12 +1,12 @@
 import { err, ok, type Result } from "./result"
 
 /**
- * A validated `DATABASE_URL` connection string.
+ * Una cadena de conexión `DATABASE_URL` validada.
  *
- * Constructed only by `parseDatabaseUrl`. Takes `unknown` at the boundary
- * because the raw value comes from `process.env`, which is untrusted,
- * possibly-absent external input — never assumed to already be a
- * well-formed connection string.
+ * Construida únicamente por `parseDatabaseUrl`. Recibe `unknown` en el límite
+ * porque el valor crudo proviene de `process.env`, que es una entrada externa
+ * no confiable y posiblemente ausente — nunca se asume que ya sea una
+ * cadena de conexión bien formada.
  */
 export type DatabaseUrl = string & { readonly __brand: "DatabaseUrl" }
 
@@ -45,9 +45,9 @@ export function parseDatabaseUrl(candidate: unknown): Result<DatabaseUrl, Databa
 }
 
 /**
- * Reads and validates `DATABASE_URL` from the process environment. Fails
- * loudly with a typed error instead of ever constructing a `Pool` from an
- * absent or malformed connection string.
+ * Lee y valida `DATABASE_URL` desde el entorno del proceso. Falla
+ * de forma ruidosa con un error tipado en lugar de llegar a construir un `Pool` a partir de
+ * una cadena de conexión ausente o malformada.
  */
 export function getDatabaseUrlFromEnv(): Result<DatabaseUrl, DatabaseUrlError> {
   return parseDatabaseUrl(process.env.DATABASE_URL)

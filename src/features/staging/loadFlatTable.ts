@@ -5,12 +5,12 @@ import type { StagingError, StagingPort } from "./stagingPort"
 import type { StagingSchemaName } from "./stagingSchemaName"
 
 /**
- * Stages an uploaded `.sql` script and reads it back as a `FlatTable`.
+ * Coloca en staging un script `.sql` subido y lo lee de vuelta como un `FlatTable`.
  *
- * Orchestrates the port in the sequence the feature depends on: reset the
- * schema, run the script, discover the table it created, then read its
- * rows. Depends only on `StagingPort` — never on `pg` — so it is exercised
- * in tests against an in-memory fake with no live database.
+ * Orquesta el puerto en la secuencia de la que depende esta funcionalidad: reiniciar el
+ * esquema, ejecutar el script, descubrir la tabla que creó, y luego leer sus
+ * filas. Depende únicamente de `StagingPort` — nunca de `pg` — así que se ejercita
+ * en las pruebas contra un falso en memoria sin base de datos real.
  */
 export async function loadFlatTable(
   port: StagingPort,

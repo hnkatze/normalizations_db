@@ -1,10 +1,10 @@
 /**
- * Public API of the staging feature.
+ * API pública de la funcionalidad de staging.
  *
- * This is the only PostgreSQL-touching boundary in the system: it turns an
- * uploaded `.sql` script into the in-memory `FlatTable` the domain engines
- * consume. Consumers depend on `StagingPort` and `loadFlatTable`; only the
- * composition root should import `createPgStagingAdapter` directly.
+ * Este es el único límite del sistema que toca PostgreSQL: convierte un
+ * script `.sql` subido en el `FlatTable` en memoria que consumen los motores del
+ * dominio. Los consumidores dependen de `StagingPort` y `loadFlatTable`; solo la
+ * raíz de composición debería importar `createPgStagingAdapter` directamente.
  */
 
 export type { DatabaseUrl, DatabaseUrlError } from "./databaseUrl"

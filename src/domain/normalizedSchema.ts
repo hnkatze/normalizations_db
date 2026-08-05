@@ -1,72 +1,74 @@
 /**
- * The relational model AFTER normalization: the target schema, plus the
- * provenance needed to migrate data into it.
+ * El modelo relacional DESPUÉS de la normalización: el esquema destino, más
+ * la procedencia necesaria para migrar los datos hacia él.
  */
 
 import type { ColumnDefinition, ColumnName, FlatTable } from "./relationalModel"
 import type { FunctionalDependency } from "./functionalDependency"
 
-/** A foreign key from one normalized table to another. */
+/** Una clave foránea de una tabla normalizada hacia otra. */
 export type ForeignKey = {
-  /** Columns on this table. Positionally aligned with `referencesColumns`. */
+  /** Columnas en esta tabla. Alineadas posicionalmente con `referencesColumns`. */
   readonly columns: readonly ColumnName[]
   readonly referencesTable: string
-  /** Columns on the referenced table. Same length as `columns`. */
+  /** Columnas en la tabla referenciada. Misma longitud que `columns`. */
   readonly referencesColumns: readonly ColumnName[]
 }
 
-/** One table in the normalized output. */
+/** Una tabla en la salida normalizada. */
 export type NormalizedTable = {
   readonly name: string
   readonly columns: readonly ColumnDefinition[]
-  /** Never empty. Composite when the decomposition demands it. */
+  /** Nunca vacía. Compuesta cuando la descomposición lo exige. */
   readonly primaryKey: readonly ColumnName[]
   readonly foreignKeys: readonly ForeignKey[]
   /**
-   * Columns of the ORIGINAL flat table that this table was carved out of.
+   * Columnas de la tabla plana ORIGINAL de la que se extrajo esta tabla.
    *
-   * This is what makes the migration writable: without provenance there is no
-   * way to emit `INSERT INTO t (...) SELECT DISTINCT ... FROM staging.original`.
+   * Esto es lo que hace que la migración sea escribible: sin procedencia no
+   * hay forma de emitir `INSERT INTO t (...) SELECT DISTINCT ... FROM staging.original`.
    */
   readonly sourceColumns: readonly ColumnName[]
 }
 
-/** The decomposition result. */
+/** El resultado de la descomposición. */
 export type NormalizedSchema = {
-  /** Scope is capped at 3NF by an explicit project decision. */
+  /** El alcance está limitado a 3FN por una decisión explícita del proyecto. */
   readonly normalForm: "3NF"
   readonly tables: readonly NormalizedTable[]
 }
 
 /**
- * Everything the normalization engine needs.
+ * Todo lo que necesita el motor de normalización.
  *
- * It takes CONFIRMED dependencies only — the engine never sees a proposal the
- * user has not ruled on, which is what keeps "the data suggests, the user
- * decides" true all the way down the pipeline.
+ * Recibe únicamente dependencias CONFIRMADAS — el motor nunca ve una
+ * propuesta sobre la que el usuario no se ha pronunciado, que es lo que
+ * mantiene válido "los datos sugieren, el usuario decide" a lo largo de
+ * todo el pipeline.
  */
 export type NormalizationInput = {
   readonly table: FlatTable
   readonly confirmedDependencies: readonly FunctionalDependency[]
-  /** The primary key of the source table, as chosen by the user. Never empty. */
+  /** La clave primaria de la tabla origen, elegida por el usuario. Nunca vacía. */
   readonly primaryKey: readonly ColumnName[]
 }
 
 /**
- * Why an attribute was moved out of the source table.
+ * Por qué un atributo fue movido fuera de la tabla origen.
  *
- * A discriminated union rather than optional flags: an attribute is displaced
- * for exactly one reason, and making the other reason's fields unreachable is
- * what stops "partial and transitive at the same time" from being expressible.
+ * Una unión discriminada en lugar de flags opcionales: un atributo se
+ * desplaza por exactamente una razón, y hacer inalcanzables los campos de
+ * la otra razón es lo que impide que "parcial y transitiva a la vez" sea
+ * expresable.
  */
 export type Displacement =
   | {
       readonly kind: "partial"
-      /** Proper subset of the composite primary key that determines it. */
+      /** Subconjunto propio de la clave primaria compuesta que lo determina. */
       readonly determinant: readonly ColumnName[]
     }
   | {
       readonly kind: "transitive"
-      /** Non-key determinant that sits between the key and the attribute. */
+      /** Determinante que no es clave y se ubica entre la clave y el atributo. */
       readonly determinant: readonly ColumnName[]
     }

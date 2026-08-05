@@ -1,10 +1,10 @@
 /**
- * A `Result`-style discriminated union for expected, recoverable failures.
+ * Una unión discriminada al estilo `Result` para fallos esperados y recuperables.
  *
- * Used throughout this feature instead of throwing, because the API route
- * above the staging adapter needs to render every failure mode (bad upload
- * SQL, no table created, connection refused, ...) to the end user rather
- * than crash.
+ * Se usa en toda esta funcionalidad en lugar de lanzar excepciones, porque la ruta de la API
+ * por encima del adaptador de staging necesita mostrar al usuario final cada modo de fallo
+ * (SQL de carga inválido, ninguna tabla creada, conexión rechazada, ...) en lugar de
+ * fallar de forma abrupta.
  */
 export type Result<TValue, TError> =
   | { readonly ok: true; readonly value: TValue }

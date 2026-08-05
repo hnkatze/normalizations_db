@@ -1,42 +1,45 @@
 /**
- * The relational model as it exists BEFORE normalization: one flat table.
+ * El modelo relacional tal como existe ANTES de la normalización: una única
+ * tabla plana.
  *
- * This module is the domain core. It imports nothing — not React, not Next, not
- * `pg` — so it stays testable in isolation and replaceable at the edges.
+ * Este módulo es el núcleo de dominio. No importa nada — ni React, ni Next,
+ * ni `pg` — de modo que se mantiene comprobable en aislamiento y reemplazable
+ * en los bordes.
  */
 
-/** A single cell as it comes back from a SQL driver. */
+/** Una única celda tal como regresa desde un driver SQL. */
 export type CellValue = string | number | boolean | null
 
 /**
- * A column name.
+ * Un nombre de columna.
  *
- * Deliberately NOT branded. Column names originate from `Object.keys(row)` and
- * from `information_schema`, so a brand would force an `as` cast at every one of
- * those boundaries — trading a small class of mix-ups for a large class of
- * unchecked assertions. Precise structural types carry the weight instead.
+ * Deliberadamente SIN branding. Los nombres de columna se originan tanto en
+ * `Object.keys(row)` como en `information_schema`, así que un branding
+ * forzaría un cast `as` en cada uno de esos bordes — cambiando una pequeña
+ * clase de confusiones por una gran clase de aserciones sin verificar. Los
+ * tipos estructurales precisos cargan con ese peso en su lugar.
  */
 export type ColumnName = string
 
-/** One row of the flat source table, keyed by column name. */
+/** Una fila de la tabla origen plana, indexada por nombre de columna. */
 export type Row = Readonly<Record<ColumnName, CellValue>>
 
-/** A column as reported by `information_schema.columns`. */
+/** Una columna tal como la reporta `information_schema.columns`. */
 export type ColumnDefinition = {
   readonly name: ColumnName
-  /** The SQL type verbatim, e.g. `"integer"`, `"character varying"`. */
+  /** El tipo SQL tal cual, por ejemplo `"integer"`, `"character varying"`. */
   readonly sqlType: string
   readonly nullable: boolean
 }
 
-/** The unnormalized (0NF/1NF) table the whole pipeline starts from. */
+/** La tabla no normalizada (0FN/1FN) de la que parte todo el pipeline. */
 export type FlatTable = {
   readonly name: string
   readonly columns: readonly ColumnDefinition[]
   readonly rows: readonly Row[]
 }
 
-/** Returns the column names of a table, in declaration order. */
+/** Devuelve los nombres de columna de una tabla, en orden de declaración. */
 export function columnNamesOf(table: FlatTable): readonly ColumnName[] {
   return table.columns.map((column) => column.name)
 }

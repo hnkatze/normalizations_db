@@ -1,8 +1,8 @@
 /**
- * Public API of the domain core.
+ * API pública del núcleo de dominio.
  *
- * Every feature imports from `@/domain` and never deep-imports these modules
- * directly. The domain depends on nothing; everything depends on the domain.
+ * Cada feature importa desde `@/domain` y nunca hace deep-import de estos
+ * módulos directamente. El dominio no depende de nada; todo depende del dominio.
  */
 
 export type {

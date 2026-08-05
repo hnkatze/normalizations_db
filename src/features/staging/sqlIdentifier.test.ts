@@ -14,7 +14,7 @@ describe("quoteIdentifier", () => {
   it("neutralizes a semicolon-based statement injection attempt", () => {
     const malicious = 'x"; DROP TABLE users; --'
     const quoted = quoteIdentifier(malicious)
-    // The only unescaped double quotes must be the two wrapping ones.
+    // Las únicas comillas dobles sin escapar deben ser las dos que envuelven el identificador.
     const inner = quoted.slice(1, -1)
     expect(inner.replaceAll('""', "")).not.toContain('"')
   })

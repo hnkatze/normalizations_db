@@ -10,16 +10,18 @@ import {
 } from "./ventasRawFixture"
 
 /**
- * End-to-end proof over the reference dataset: detection -> user confirmation
- * -> 3NF decomposition. The two engines were built concurrently by separate
- * units that never saw each other's code, so this is the first thing that
- * exercises them as one pipeline.
+ * Prueba de extremo a extremo sobre el conjunto de datos de referencia:
+ * detección -> confirmación del usuario -> descomposición 3NF. Los dos
+ * motores fueron construidos de forma concurrente por unidades separadas que
+ * nunca vieron el código del otro, así que esta es la primera vez que se
+ * ejercitan como un solo pipeline.
  *
- * Step 2 is the honest part of this product. The detector reports every
- * dependency the DATA supports, including 27 that are true but wrong to act on
- * (closure over the chain, alternate keys, arithmetic on the derived
- * `subtotal`). Confirming those flattens the chain and corrupts the schema.
- * Here the answer key stands in for the human; in the app it is the review UI.
+ * El paso 2 es la parte honesta de este producto. El detector reporta cada
+ * dependencia que los DATOS respaldan, incluyendo 27 que son verdaderas pero
+ * incorrectas para actuar sobre ellas (clausura sobre la cadena, claves
+ * alternas, aritmética sobre el `subtotal` derivado). Confirmar esas aplana
+ * la cadena y corrompe el esquema. Aquí la clave de respuestas hace las veces
+ * del humano; en la aplicación es la interfaz de revisión.
  */
 
 function sameColumnSet(
@@ -40,7 +42,7 @@ function isConfirmedByGroundTruth(candidate: FunctionalDependency): boolean {
   )
 }
 
-/** Primary keys of the six tables GROUND_TRUTH.md specifies. */
+/** Claves primarias de las seis tablas que especifica GROUND_TRUTH.md. */
 const EXPECTED_PRIMARY_KEYS: readonly (readonly ColumnName[])[] = [
   ["cliente_ciudad_id"],
   ["categoria_id"],
@@ -50,7 +52,7 @@ const EXPECTED_PRIMARY_KEYS: readonly (readonly ColumnName[])[] = [
   ["venta_id", "producto_id"],
 ]
 
-/** Column membership per table, keyed by that table's primary key. */
+/** Pertenencia de columnas por tabla, indexada por la clave primaria de esa tabla. */
 const EXPECTED_COLUMNS: readonly {
   readonly primaryKey: readonly ColumnName[]
   readonly columns: readonly ColumnName[]
@@ -104,8 +106,8 @@ describe("detection -> confirmation -> 3NF over the reference dataset", () => {
 
   it("confirms exactly the answer key out of everything detected", () => {
     expect(confirmed.length).toBe(expectedDependencies.length)
-    // The detector must also be surfacing far more than the answer key —
-    // if it were not, the confirmation step would be pointless.
+    // El detector también debe estar sacando a la luz mucho más que la clave
+    // de respuestas — si no fuera así, el paso de confirmación no tendría sentido.
     expect(detected.dependencies.length).toBeGreaterThan(confirmed.length)
   })
 
@@ -162,9 +164,9 @@ describe("detection -> confirmation -> 3NF over the reference dataset", () => {
   })
 
   it("wires foreign keys that point at real primary keys", () => {
-    // Without this guard the loops below iterate zero times if the engine ever
-    // stops emitting foreign keys at all, and the test passes having asserted
-    // nothing. A test that cannot fail is not evidence.
+    // Sin este resguardo los bucles de abajo iteran cero veces si el motor
+    // alguna vez deja de emitir claves foráneas, y la prueba pasa sin haber
+    // afirmado nada. Una prueba que no puede fallar no es evidencia.
     expect(schema.tables.some((table) => table.foreignKeys.length > 0)).toBe(
       true
     )

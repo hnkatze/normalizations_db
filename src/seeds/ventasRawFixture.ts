@@ -1,31 +1,35 @@
 /**
- * The `ventas_raw` seed as an in-memory fixture — and the ANSWER KEY the
- * detection engine is graded against.
+ * El seed de `ventas_raw` como fixture en memoria — y la CLAVE DE RESPUESTAS
+ * contra la que se evalúa el motor de detección.
  *
- * This is not sample data. Every dependency the engine is supposed to
- * rediscover was designed into these rows on purpose, and `expectedDependencies`
- * below states exactly which ones. A detector that finds fewer is broken; a
- * detector that finds more outside `expectedIncidentalDependencies` is
- * hallucinating.
+ * Esto no son datos de muestra. Cada dependencia que se espera que el motor
+ * redescubra fue diseñada deliberadamente en estas filas, y `expectedDependencies`
+ * más abajo indica exactamente cuáles son. Un detector que encuentra menos está
+ * roto; un detector que encuentra más, fuera de `expectedIncidentalDependencies`,
+ * está alucinando.
  *
- * Construction note: the rows are NOT written out one by one. They are assembled
- * by joining small entity tables (ciudades -> clientes -> ventas, categorias ->
- * productos) that reference each other by object identity rather than by id
- * lookup. That is deliberate. A hand-written 56-row literal can hold a one-
- * character typo in a repeated `cliente_nombre`, and that single typo silently
- * destroys the answer key while still looking like valid data. Joining from the
- * entity tables makes every designed dependency true by construction.
+ * Nota de construcción: las filas NO se escriben una por una. Se ensamblan
+ * uniendo pequeñas tablas de entidades (ciudades -> clientes -> ventas, categorias ->
+ * productos) que se referencian entre sí por identidad de objeto en lugar de
+ * mediante búsqueda por id. Eso es deliberado. Un literal de 56 filas escrito a
+ * mano puede contener un error tipográfico de un solo carácter en un
+ * `cliente_nombre` repetido, y ese único error tipográfico destruye
+ * silenciosamente la clave de respuestas mientras sigue pareciendo un dato
+ * válido. Unir desde las tablas de entidades hace que cada dependencia
+ * diseñada sea verdadera por construcción.
  *
- * Those entity tables are also, quite literally, the expected 3NF decomposition.
+ * Esas tablas de entidades son también, muy literalmente, la descomposición
+ * 3NF esperada.
  *
- * `src/seeds/seed_ventas_raw.sql` is generated from these exact values and must
- * stay byte-for-byte equivalent in content. See `GROUND_TRUTH.md`.
+ * `src/seeds/seed_ventas_raw.sql` se genera a partir de estos mismos valores y
+ * debe mantenerse equivalente byte a byte en contenido. Ver `GROUND_TRUTH.md`.
  */
 
 import type { CellValue, ColumnDefinition, ColumnName, FlatTable, Row } from "@/domain"
 
 /* -------------------------------------------------------------------------- */
-/* Entity tables — the 3NF form the flat table is expected to decompose into.  */
+/* Tablas de entidades — la forma 3NF a la que se espera que se descomponga    */
+/* la tabla plana.                                                             */
 /* -------------------------------------------------------------------------- */
 
 type Ciudad = {
@@ -49,19 +53,19 @@ type Categoria = {
 type Producto = {
   readonly id: number
   readonly nombre: string
-  /** Unit price. Two products share a price on purpose — see GROUND_TRUTH.md. */
+  /** Precio unitario. Dos productos comparten precio a propósito — ver GROUND_TRUTH.md. */
   readonly precio: number
   readonly categoria: Categoria
 }
 
 type Venta = {
   readonly id: number
-  /** ISO `YYYY-MM-DD`. Two ventas share a date on purpose. */
+  /** ISO `YYYY-MM-DD`. Dos ventas comparten fecha a propósito. */
   readonly fecha: string
   readonly cliente: Cliente
 }
 
-/** One line of a venta. The grain of the flat table: `(venta_id, producto_id)`. */
+/** Una línea de una venta. El grano de la tabla plana: `(venta_id, producto_id)`. */
 type LineItem = {
   readonly venta: Venta
   readonly producto: Producto
@@ -72,7 +76,7 @@ const TEGUCIGALPA: Ciudad = { id: 1, nombre: "Tegucigalpa", pais: "Honduras" }
 const SAN_PEDRO_SULA: Ciudad = { id: 2, nombre: "San Pedro Sula", pais: "Honduras" }
 const GUATEMALA: Ciudad = { id: 3, nombre: "Ciudad de Guatemala", pais: "Guatemala" }
 
-/** Two ciudades share a pais, so `cliente_ciudad_pais` determines nothing. */
+/** Dos ciudades comparten un pais, así que `cliente_ciudad_pais` no determina nada. */
 const ciudades: readonly Ciudad[] = [TEGUCIGALPA, SAN_PEDRO_SULA, GUATEMALA]
 
 const ANA: Cliente = {
@@ -122,7 +126,7 @@ const PAN: Producto = { id: 104, nombre: "Pan integral", precio: 28.0, categoria
 const TORTILLAS: Producto = { id: 105, nombre: "Tortillas de maiz", precio: 18.5, categoria: PANADERIA }
 const LECHE: Producto = { id: 106, nombre: "Leche entera 1L", precio: 24.9, categoria: LACTEOS }
 const QUESO: Producto = { id: 107, nombre: "Queso fresco 400g", precio: 62.0, categoria: LACTEOS }
-/** Shares its price with TE_VERDE on purpose: kills `producto_precio -> *`. */
+/** Comparte su precio con TE_VERDE a propósito: elimina `producto_precio -> *`. */
 const YOGURT: Producto = { id: 108, nombre: "Yogurt natural 1L", precio: 45.5, categoria: LACTEOS }
 const DETERGENTE: Producto = { id: 109, nombre: "Detergente 1kg", precio: 95.0, categoria: LIMPIEZA }
 const JABON: Producto = { id: 110, nombre: "Jabon de manos", precio: 21.75, categoria: LIMPIEZA }
@@ -141,10 +145,10 @@ const productos: readonly Producto[] = [
 ]
 
 /**
- * Ventas 3 and 4 share a date on purpose, and their clientes sit in different
- * ciudades AND different paises on purpose too. The shared date kills
- * `fecha_venta -> venta_id` and `fecha_venta -> cliente_id`; the contrasting
- * ciudades kill the coincidental `fecha_venta -> cliente_ciudad_*`.
+ * Las ventas 3 y 4 comparten fecha a propósito, y sus clientes están en
+ * ciudades distintas Y también en paises distintos a propósito. La fecha
+ * compartida elimina `fecha_venta -> venta_id` y `fecha_venta -> cliente_id`;
+ * el contraste de ciudades elimina la coincidencia `fecha_venta -> cliente_ciudad_*`.
  */
 const VENTA_1: Venta = { id: 1, fecha: "2024-03-04", cliente: ANA }
 const VENTA_2: Venta = { id: 2, fecha: "2024-03-07", cliente: BRUNO }
@@ -167,10 +171,11 @@ const ventas: readonly Venta[] = [
 ]
 
 /**
- * The 56 line items, ordered by `(venta_id, producto_id)`.
+ * Las 56 líneas de venta, ordenadas por `(venta_id, producto_id)`.
  *
- * `cantidad` varies within every venta AND across every producto, so neither
- * half of the composite key accidentally determines it. Only the full key does.
+ * `cantidad` varía dentro de cada venta Y a través de cada producto, así que
+ * ninguna de las dos mitades de la clave compuesta la determina por accidente.
+ * Solo la clave completa lo hace.
  */
 const lineItems: readonly LineItem[] = [
   { venta: VENTA_1, producto: CAFE, cantidad: 2 },
@@ -239,20 +244,20 @@ const lineItems: readonly LineItem[] = [
 ]
 
 /* -------------------------------------------------------------------------- */
-/* Flattening                                                                  */
+/* Aplanamiento                                                                */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Rounds to cents.
+ * Redondea a centavos.
  *
- * `24.9 * 3` is `74.69999999999999` in IEEE-754, and a fixture that stores that
- * would not match the `numeric(10,2)` column the SQL seed writes.
+ * `24.9 * 3` es `74.69999999999999` en IEEE-754, y un fixture que almacenara
+ * ese valor no coincidiría con la columna `numeric(10,2)` que escribe el seed SQL.
  */
 function toCents(value: number): number {
   return Math.round(value * 100) / 100
 }
 
-/** `subtotal` is DERIVED: `cantidad * producto_precio`. See GROUND_TRUTH.md. */
+/** `subtotal` es DERIVADO: `cantidad * producto_precio`. Ver GROUND_TRUTH.md. */
 function subtotalOf(item: LineItem): number {
   return toCents(item.cantidad * item.producto.precio)
 }
@@ -285,9 +290,9 @@ function toRow(item: LineItem): Row {
 }
 
 /**
- * Column metadata as `information_schema.columns` reports it for the SQL seed:
- * `sqlType` is the `data_type` string, not the DDL spelling, so `varchar` is
- * `"character varying"` and `numeric(10,2)` is `"numeric"`.
+ * Metadatos de columna tal como los reporta `information_schema.columns` para
+ * el seed SQL: `sqlType` es la cadena `data_type`, no la ortografía del DDL,
+ * así que `varchar` es `"character varying"` y `numeric(10,2)` es `"numeric"`.
  */
 const ventasRawColumns: readonly ColumnDefinition[] = [
   { name: "venta_id", sqlType: "integer", nullable: false },
@@ -307,17 +312,17 @@ const ventasRawColumns: readonly ColumnDefinition[] = [
   { name: "subtotal", sqlType: "numeric", nullable: false },
 ]
 
-/** The unnormalized source table. Identical in content to the SQL seed. */
+/** La tabla fuente sin normalizar. Idéntica en contenido al seed SQL. */
 export const ventasRawFixture: FlatTable = {
   name: "ventas_raw",
   columns: ventasRawColumns,
   rows: lineItems.map(toRow),
 }
 
-/** The composite primary key of `ventas_raw`, in declaration order. */
+/** La clave primaria compuesta de `ventas_raw`, en orden de declaración. */
 export const ventasRawPrimaryKey: readonly ColumnName[] = ["venta_id", "producto_id"]
 
-/** Entity counts the seed was designed around. Handy as a smoke assertion. */
+/** Conteos de entidades alrededor de los cuales se diseñó el seed. Útil como aserción de humo. */
 export const ventasRawCardinality = {
   rows: lineItems.length,
   ventas: ventas.length,
@@ -328,24 +333,25 @@ export const ventasRawCardinality = {
 } as const
 
 /* -------------------------------------------------------------------------- */
-/* The answer key                                                              */
+/* La clave de respuestas                                                      */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Why a dependency exists, in normalization terms.
+ * Por qué existe una dependencia, en términos de normalización.
  *
- * - `partial`    — a proper subset of the composite key determines it. 2NF moves it out.
- * - `transitive` — a non-key attribute determines it. 3NF moves it out.
- * - `full`       — the whole composite key determines it. It stays in the fact table.
+ * - `partial`    — un subconjunto propio de la clave compuesta la determina. La 2NF la extrae.
+ * - `transitive` — un atributo que no es clave la determina. La 3NF la extrae.
+ * - `full`       — la clave compuesta completa la determina. Permanece en la tabla de hechos.
  */
 export type ExpectedDependencyKind = "partial" | "transitive" | "full"
 
 /**
- * A dependency stated as ground truth.
+ * Una dependencia declarada como verdad fundamental (ground truth).
  *
- * Deliberately NOT a `FunctionalDependency`: that type carries `FdEvidence`,
- * which is something the detector observes about a sample. Ground truth is a
- * claim about the design, so it carries no counts to be wrong about.
+ * Deliberadamente NO es una `FunctionalDependency`: ese tipo lleva `FdEvidence`,
+ * que es algo que el detector observa sobre una muestra. La verdad fundamental
+ * es una afirmación sobre el diseño, así que no lleva conteos sobre los que
+ * pueda estar equivocada.
  */
 export type ExpectedDependency = {
   readonly determinant: readonly ColumnName[]
@@ -354,18 +360,18 @@ export type ExpectedDependency = {
 }
 
 /**
- * Every dependency the detector MUST find. Missing one is a false negative and
- * a defect.
+ * Toda dependencia que el detector DEBE encontrar. Que falte una es un falso
+ * negativo y un defecto.
  */
 export const expectedDependencies: readonly ExpectedDependency[] = [
-  // Partial — 2NF violations.
+  // Parcial — violaciones de 2NF.
   { determinant: ["venta_id"], dependent: "fecha_venta", kind: "partial" },
   { determinant: ["venta_id"], dependent: "cliente_id", kind: "partial" },
   { determinant: ["producto_id"], dependent: "producto_nombre", kind: "partial" },
   { determinant: ["producto_id"], dependent: "producto_precio", kind: "partial" },
   { determinant: ["producto_id"], dependent: "categoria_id", kind: "partial" },
 
-  // Transitive — 3NF violations.
+  // Transitiva — violaciones de 3NF.
   { determinant: ["cliente_id"], dependent: "cliente_nombre", kind: "transitive" },
   { determinant: ["cliente_id"], dependent: "cliente_email", kind: "transitive" },
   { determinant: ["cliente_id"], dependent: "cliente_ciudad_id", kind: "transitive" },
@@ -373,19 +379,20 @@ export const expectedDependencies: readonly ExpectedDependency[] = [
   { determinant: ["cliente_ciudad_id"], dependent: "cliente_ciudad_pais", kind: "transitive" },
   { determinant: ["categoria_id"], dependent: "categoria_nombre", kind: "transitive" },
 
-  // Full — correctly stays on the fact table.
+  // Completa — permanece correctamente en la tabla de hechos.
   { determinant: ["venta_id", "producto_id"], dependent: "cantidad", kind: "full" },
   { determinant: ["venta_id", "producto_id"], dependent: "subtotal", kind: "full" },
 ]
 
 /**
- * Why a dependency that is true in the data is nonetheless not part of the
- * answer key.
+ * Por qué una dependencia que es verdadera en los datos no forma parte, sin
+ * embargo, de la clave de respuestas.
  *
- * - `closure`  — implied by transitivity over `expectedDependencies`.
- * - `inverse`  — holds because the dependent side is a candidate key (unique
- *                names, unique emails), so the arrow points back at the id.
- * - `derived`  — an artifact of `subtotal = cantidad * producto_precio`.
+ * - `closure`  — implicada por transitividad sobre `expectedDependencies`.
+ * - `inverse`  — se cumple porque el lado dependiente es una clave candidata
+ *                (nombres únicos, emails únicos), así que la flecha apunta de
+ *                vuelta hacia el id.
+ * - `derived`  — un artefacto de `subtotal = cantidad * producto_precio`.
  */
 export type IncidentalReason = "closure" | "inverse" | "derived"
 
@@ -396,16 +403,17 @@ export type IncidentalDependency = {
 }
 
 /**
- * Dependencies that genuinely hold in these rows but must NOT be counted as
- * detector errors.
+ * Dependencias que genuinamente se cumplen en estas filas pero que NO deben
+ * contarse como errores del detector.
  *
- * A test asserting "the detector found nothing beyond the answer key" would
- * fail against a correct detector, because all of these are true. Assert
- * instead that every reported single- or key-subset dependency appears in
- * `expectedDependencies` or here.
+ * Una prueba que afirmara "el detector no encontró nada más allá de la clave
+ * de respuestas" fallaría contra un detector correcto, porque todas estas son
+ * verdaderas. En su lugar, afirmar que cada dependencia reportada de un solo
+ * atributo o de un subconjunto de la clave aparece en `expectedDependencies`
+ * o aquí.
  */
 export const expectedIncidentalDependencies: readonly IncidentalDependency[] = [
-  // Closure over the venta_id -> cliente_id -> cliente_ciudad_id chain.
+  // Clausura sobre la cadena venta_id -> cliente_id -> cliente_ciudad_id.
   { determinant: ["venta_id"], dependent: "cliente_nombre", reason: "closure" },
   { determinant: ["venta_id"], dependent: "cliente_email", reason: "closure" },
   { determinant: ["venta_id"], dependent: "cliente_ciudad_id", reason: "closure" },
@@ -415,7 +423,7 @@ export const expectedIncidentalDependencies: readonly IncidentalDependency[] = [
   { determinant: ["cliente_id"], dependent: "cliente_ciudad_pais", reason: "closure" },
   { determinant: ["producto_id"], dependent: "categoria_nombre", reason: "closure" },
 
-  // Inverse — the dependent side of these is a candidate key of its entity.
+  // Inversa — el lado dependiente de estas es una clave candidata de su entidad.
   { determinant: ["cliente_nombre"], dependent: "cliente_id", reason: "inverse" },
   { determinant: ["cliente_nombre"], dependent: "cliente_email", reason: "inverse" },
   { determinant: ["cliente_nombre"], dependent: "cliente_ciudad_id", reason: "inverse" },
@@ -434,7 +442,7 @@ export const expectedIncidentalDependencies: readonly IncidentalDependency[] = [
   { determinant: ["producto_nombre"], dependent: "categoria_nombre", reason: "inverse" },
   { determinant: ["categoria_nombre"], dependent: "categoria_id", reason: "inverse" },
 
-  // Derived — consequences of subtotal = cantidad * producto_precio.
+  // Derivada — consecuencias de subtotal = cantidad * producto_precio.
   { determinant: ["subtotal"], dependent: "cantidad", reason: "derived" },
   { determinant: ["subtotal"], dependent: "producto_precio", reason: "derived" },
 ]

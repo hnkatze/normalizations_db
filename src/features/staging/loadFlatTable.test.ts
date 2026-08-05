@@ -18,7 +18,7 @@ function requireSchema(candidate: string): StagingSchemaName {
 
 const SCHEMA = requireSchema("staging_test")
 
-/** A hand-written in-memory fake of `StagingPort` — no `pg`, no network. */
+/** Un falso en memoria escrito a mano de `StagingPort` — sin `pg`, sin red. */
 class FakeStagingPort implements StagingPort {
   public resetSchemaCalls = 0
   public runScriptCalls: string[] = []

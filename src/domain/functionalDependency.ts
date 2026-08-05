@@ -1,103 +1,111 @@
 /**
- * Functional dependencies: the output of detection, the input to normalization.
+ * Dependencias funcionales: la salida de la detección, la entrada de la normalización.
  *
- * Detection is a heuristic over OBSERVED DATA, not over real business rules.
- * Every type here is shaped around that honesty: an FD always travels with the
- * evidence that produced it, so the user can judge it rather than trust it.
+ * La detección es una heurística sobre DATOS OBSERVADOS, no sobre reglas de
+ * negocio reales. Cada tipo aquí está diseñado en torno a esa honestidad: una
+ * FD siempre viaja junto con la evidencia que la produjo, de modo que el
+ * usuario pueda juzgarla en lugar de confiar en ella.
  */
 
 import type { ColumnName } from "./relationalModel"
 
 /**
- * A single functional dependency, `determinant -> dependent`.
+ * Una única dependencia funcional, `determinante -> dependiente`.
  *
- * The right-hand side is ONE attribute on purpose. `X -> {A, B}` is always
- * decomposable into `X -> A` and `X -> B`, and this canonical form keeps the
- * 2NF/3NF decomposition rules from having to unpack sets on the right.
+ * El lado derecho es UN solo atributo, a propósito. `X -> {A, B}` siempre es
+ * descomponible en `X -> A` y `X -> B`, y esta forma canónica evita que las
+ * reglas de descomposición de 2FN/3FN tengan que desempaquetar conjuntos en
+ * el lado derecho.
  */
 export type FunctionalDependency = {
-  /** Left-hand side. Never empty. Order is not significant. */
+  /** Lado izquierdo. Nunca vacío. El orden no es significativo. */
   readonly determinant: readonly ColumnName[]
-  /** Right-hand side. Exactly one attribute. */
+  /** Lado derecho. Exactamente un atributo. */
   readonly dependent: ColumnName
   readonly evidence: FdEvidence
 }
 
 /**
- * Why detection believes the dependency holds.
+ * Por qué la detección cree que la dependencia se cumple.
  *
- * This is what the confirmation screen renders. Showing a bare checkbox list
- * would ask the user to rubber-stamp claims they cannot evaluate.
+ * Esto es lo que renderiza la pantalla de confirmación. Mostrar una simple
+ * lista de casillas de verificación obligaría al usuario a aprobar
+ * afirmaciones que no puede evaluar.
  */
 export type FdEvidence = {
-  /** Distinct determinant values observed. */
+  /** Valores distintos del determinante observados. */
   readonly groupCount: number
-  /** Rows the dependency was checked against. */
+  /** Filas contra las que se verificó la dependencia. */
   readonly rowCount: number
-  /** Size of the largest determinant group. */
+  /** Tamaño del grupo de determinante más grande. */
   readonly maxGroupSize: number
-  /** True when `dependent` is already part of `determinant`. */
+  /** Verdadero cuando `dependent` ya forma parte de `determinant`. */
   readonly isTrivial: boolean
 }
 
 /**
- * A dependency is vacuous when every determinant value occurs exactly once:
- * with no repeated group there is nothing to contradict it, so it holds by
- * accident of the sample rather than by any rule.
+ * Una dependencia es vacua cuando cada valor del determinante ocurre
+ * exactamente una vez: al no haber grupo repetido no hay nada que la
+ * contradiga, así que se cumple por accidente de la muestra y no por
+ * ninguna regla.
  *
- * This is the single most important signal on the confirmation screen — a
- * near-unique column appears to determine every other column in the table.
+ * Esta es la señal más importante de la pantalla de confirmación: una
+ * columna casi única parece determinar todas las demás columnas de la tabla.
  *
- * TRAP — do not wire this straight to "discard". A dependency on the COMPLETE
- * primary key is always vacuous, because a primary key is unique by definition,
- * so every one of its groups holds exactly one row. Those are precisely the
- * dependencies that must be KEPT: they are the fact table. Verified against the
- * reference dataset, where `(venta_id, producto_id) -> cantidad` and
- * `-> subtotal` both report `maxGroupSize: 1`.
+ * TRAMPA — no conectar esto directamente a "descartar". Una dependencia
+ * sobre la clave primaria COMPLETA siempre es vacua, porque una clave
+ * primaria es única por definición, así que cada uno de sus grupos contiene
+ * exactamente una fila. Esas son precisamente las dependencias que deben
+ * MANTENERSE: son la tabla de hechos. Verificado contra el conjunto de datos
+ * de referencia, donde `(venta_id, producto_id) -> cantidad` y
+ * `-> subtotal` reportan ambas `maxGroupSize: 1`.
  *
- * Vacuity is evidence of noise only when the determinant is NOT the key. Any
- * consumer that dims, sorts down, or auto-discards on this predicate alone has
- * to exclude key determinants first.
+ * La vacuidad es evidencia de ruido solo cuando el determinante NO es la
+ * clave. Cualquier consumidor que atenúe, ordene hacia abajo o descarte
+ * automáticamente basándose únicamente en este predicado debe excluir
+ * primero los determinantes que son clave.
  */
 export function isVacuous(evidence: FdEvidence): boolean {
   return evidence.maxGroupSize <= 1
 }
 
-/** The user's verdict on a detected dependency. Detection only proposes. */
+/** El veredicto del usuario sobre una dependencia detectada. La detección solo propone. */
 export type FdDecision = "pending" | "confirmed" | "discarded"
 
-/** A detected dependency paired with the user's decision about it. */
+/** Una dependencia detectada junto con la decisión del usuario sobre ella. */
 export type ReviewedDependency = {
   readonly dependency: FunctionalDependency
   readonly decision: FdDecision
 }
 
-/** Tuning for the detector. */
+/** Ajustes del detector. */
 export type DetectionOptions = {
   /**
-   * Largest determinant the detector will test.
+   * El determinante más grande que probará el detector.
    *
-   * The candidate space is the power set of columns — 2^N. A 20-column table is
-   * over a million candidates, each needing a pass over the rows. Capping at 2
-   * covers simple and partial dependencies (a composite key is 2 columns wide in
-   * this project's scope) at C(20,1) + C(20,2) = 210 candidates.
+   * El espacio de candidatos es el conjunto potencia de las columnas — 2^N.
+   * Una tabla de 20 columnas supera el millón de candidatos, cada uno
+   * requiriendo un recorrido sobre las filas. Limitar a 2 cubre las
+   * dependencias simples y parciales (una clave compuesta tiene 2 columnas
+   * de ancho en el alcance de este proyecto) con C(20,1) + C(20,2) = 210
+   * candidatos.
    */
   readonly maxDeterminantSize: number
 }
 
 /**
- * Detection output.
+ * Salida de la detección.
  *
- * The counters are not decoration: this detector deliberately does not explore
- * the whole candidate space, and a result that silently hid that would read as
- * "these are all the dependencies" when it is not.
+ * Los contadores no son decoración: este detector deliberadamente no explora
+ * todo el espacio de candidatos, y un resultado que ocultara eso en silencio
+ * se leería como "estas son todas las dependencias" cuando no lo son.
  */
 export type DetectionResult = {
   readonly dependencies: readonly FunctionalDependency[]
-  /** Candidates actually evaluated against the rows. */
+  /** Candidatos efectivamente evaluados contra las filas. */
   readonly inspectedCandidates: number
-  /** Candidates skipped because a smaller determinant already implied them. */
+  /** Candidatos omitidos porque un determinante más pequeño ya los implicaba. */
   readonly skippedByPruning: number
-  /** Candidates never generated because of `maxDeterminantSize`. */
+  /** Candidatos nunca generados debido a `maxDeterminantSize`. */
   readonly skippedByDeterminantLimit: number
 }
