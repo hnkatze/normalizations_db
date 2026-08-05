@@ -1,48 +1,49 @@
-# Ground truth for `ventas_raw`
+# Verdad de referencia de `ventas_raw`
 
-**This is the answer key.** The `ventas_raw` seed was not sampled from anywhere — it was
-designed backwards from the dependency list below, so a human can tell a correct detector
-from a hallucinating one. If detection output disagrees with this document, the detector is
-wrong until proven otherwise.
+**Este es el solucionario.** La semilla `ventas_raw` no se muestreó de ninguna parte: se
+diseñó en sentido inverso a partir de la lista de dependencias que aparece más abajo, de
+modo que una persona pueda distinguir un detector correcto de uno que alucina. Si la salida
+de la detección contradice este documento, el detector está equivocado mientras no se
+demuestre lo contrario.
 
-Three files hold the same dataset and must never diverge:
+Tres archivos contienen el mismo conjunto de datos y nunca deben divergir:
 
-| File | Role |
+| Archivo | Función |
 | --- | --- |
-| `src/seeds/ventasRawFixture.ts` | Source of truth. Rows are joined from entity tables, so the dependencies are true by construction. |
-| `src/seeds/seed_ventas_raw.sql` | Generated from the fixture. Loads into the `staging` schema. |
-| `src/seeds/GROUND_TRUTH.md` | This document. The prose answer key. |
+| `src/seeds/ventasRawFixture.ts` | Fuente de verdad. Las filas se obtienen uniendo las tablas de entidades, de modo que las dependencias son verdaderas por construcción. |
+| `src/seeds/seed_ventas_raw.sql` | Generado a partir del fixture. Se carga en el esquema `staging`. |
+| `src/seeds/GROUND_TRUTH.md` | Este documento. El solucionario en prosa. |
 
 ---
 
-## Quick path: how to grade a detector
+## Ruta rápida: cómo calificar un detector
 
-1. Run detection over `ventas_raw` with primary key `(venta_id, producto_id)`.
-2. Every row of [The answer key](#the-answer-key) must appear. A missing one is a **false
-   negative** and a defect.
-3. Every extra dependency must appear in [Expected noise](#expected-noise-true-but-not-the-answer).
-   Those are true in the data; reporting them is correct behavior, not a bug.
-4. Anything outside both lists is a **false positive**. There should be none: at determinant
-   size 1, exactly 38 dependencies hold in this data, and all 38 are listed below.
-5. Feed the confirmed dependencies to the normalizer and compare against
-   [The expected 3NF decomposition](#the-expected-3nf-decomposition).
+1. Ejecute la detección sobre `ventas_raw` con clave primaria `(venta_id, producto_id)`.
+2. Debe aparecer cada fila de [El solucionario](#el-solucionario). Una fila ausente es un
+   **falso negativo** y constituye un defecto.
+3. Toda dependencia adicional debe aparecer en [Ruido esperado](#ruido-esperado-verdaderas-pero-no-son-la-respuesta).
+   Esas son verdaderas en los datos; informarlas es comportamiento correcto, no un error.
+4. Cualquier cosa fuera de ambas listas es un **falso positivo**. No debería haber ninguno: con
+   determinantes de tamaño 1, se cumplen exactamente 38 dependencias en estos datos, y las 38 están listadas más abajo.
+5. Entregue las dependencias confirmadas al normalizador y compare el resultado con
+   [La descomposición 3FN esperada](#la-descomposición-3fn-esperada).
 
 ---
 
-## The table
+## La tabla
 
-`ventas_raw` is one flat sales table at **line-item grain**: one row per product of a sale.
+`ventas_raw` es una única tabla plana de ventas con **grano de línea de detalle**: una fila por producto de una venta.
 
-- Primary key: `(venta_id, producto_id)` — composite, which is what makes 2NF violations
-  possible at all.
-- **56 rows**, built from 8 ventas, 10 productos, 5 clientes, 3 ciudades, 4 categorias.
-- Every column is `NOT NULL`. Nullability is deliberately not part of the exercise.
+- Clave primaria: `(venta_id, producto_id)` — compuesta, que es lo que hace posibles las
+  violaciones de 2FN.
+- **56 filas**, construidas a partir de 8 ventas, 10 productos, 5 clientes, 3 ciudades y 4 categorias.
+- Toda columna es `NOT NULL`. La nulabilidad queda deliberadamente fuera del ejercicio.
 
-Volume was chosen, not guessed. With too few rows every near-unique column appears to
-determine every other column, and the detector drowns in accidents of the sample. Each
-determinant here carries a large repeated group:
+El volumen se eligió, no se adivinó. Con muy pocas filas, cada columna casi única parece
+determinar a todas las demás, y el detector se ahoga en accidentes de la muestra. Cada
+determinante de esta tabla lleva asociado un grupo repetido grande:
 
-| Column | Distinct values | Largest group |
+| Columna | Valores distintos | Grupo más grande |
 | --- | ---: | ---: |
 | `venta_id` | 8 | 7 |
 | `fecha_venta` | 7 | 14 |
@@ -60,104 +61,106 @@ determinant here carries a large repeated group:
 | `cantidad` | 5 | 19 |
 | `subtotal` | 36 | 4 |
 
-**No column is all-unique.** The smallest largest-group is 4 (`subtotal`). No
-*single-column* determinant is vacuous in the sense of `isVacuous` — every dependency
-reported off one column had a real chance to be contradicted by the data and was not.
+**Ninguna columna es completamente única.** El menor de los grupos más grandes es 4
+(`subtotal`). Ningún determinante *de una sola columna* es vacuo en el sentido de
+`isVacuous`: toda dependencia informada a partir de una sola columna tuvo una oportunidad
+real de ser contradicha por los datos y no lo fue.
 
-**The composite key is the exception, and it is not a defect.** `(venta_id, producto_id)`
-is the primary key, so it is unique by definition: all 56 of its groups hold exactly one
-row. Both full dependencies therefore report `maxGroupSize: 1` and `isVacuous` returns
-true for them. Verified, not theorised.
+**La clave compuesta es la excepción, y no es un defecto.** `(venta_id, producto_id)` es la
+clave primaria, así que es única por definición: los 56 grupos que genera contienen
+exactamente una fila cada uno. Por lo tanto, ambas dependencias completas informan
+`maxGroupSize: 1` e `isVacuous` devuelve verdadero para ellas. Verificado, no teorizado.
 
-That matters downstream. A review UI that dims, sorts down, or auto-discards on
-`isVacuous` alone would discard `(venta_id, producto_id) -> cantidad` and `-> subtotal`
-— the two dependencies that define the fact table and must be kept. Vacuity is evidence
-of noise only when the determinant is **not** the key.
+Eso tiene consecuencias aguas abajo. Una interfaz de revisión que atenúe, ordene al final o
+descarte automáticamente basándose solo en `isVacuous` descartaría
+`(venta_id, producto_id) -> cantidad` y `-> subtotal`, es decir, las dos dependencias que
+definen la tabla de hechos y que deben conservarse. La vacuidad es evidencia de ruido
+únicamente cuando el determinante **no** es la clave.
 
 ---
 
-## The answer key
+## El solucionario
 
-13 dependencies. These are the design; the detector must find all of them.
+13 dependencias. Estas son el diseño; el detector debe encontrarlas todas.
 
-### Partial — 2NF violations
+### Parciales — violaciones de 2FN
 
-A **proper subset** of the composite key determines the attribute. 2NF exists to move these out.
+Un **subconjunto propio** de la clave compuesta determina el atributo. La 2FN existe para extraerlas.
 
-| Dependency | Why it is a violation |
+| Dependencia | Por qué es una violación |
 | --- | --- |
-| `venta_id -> fecha_venta` | The date belongs to the sale, not to the sale line. Repeated once per product on the sale. |
-| `venta_id -> cliente_id` | Same: the customer is a property of the sale. |
-| `producto_id -> producto_nombre` | The name belongs to the product, not to this line of this sale. |
-| `producto_id -> producto_precio` | Same for the unit price. |
-| `producto_id -> categoria_id` | Same for the category the product sits in. |
+| `venta_id -> fecha_venta` | La fecha pertenece a la venta, no a la línea de venta. Se repite una vez por cada producto de la venta. |
+| `venta_id -> cliente_id` | Lo mismo: el cliente es una propiedad de la venta. |
+| `producto_id -> producto_nombre` | El nombre pertenece al producto, no a esta línea de esta venta. |
+| `producto_id -> producto_precio` | Lo mismo para el precio unitario. |
+| `producto_id -> categoria_id` | Lo mismo para la categoría en la que se ubica el producto. |
 
-### Transitive — 3NF violations
+### Transitivas — violaciones de 3FN
 
-A **non-key attribute** determines another non-key attribute. 3NF exists to move these out.
+Un **atributo no clave** determina otro atributo no clave. La 3FN existe para extraerlas.
 
-| Dependency | Why it is a violation |
+| Dependencia | Por qué es una violación |
 | --- | --- |
-| `cliente_id -> cliente_nombre` | `cliente_id` is not a key of this table, yet it fixes the name. |
-| `cliente_id -> cliente_email` | Same. |
-| `cliente_id -> cliente_ciudad_id` | Same — and this one opens the third level of the chain. |
-| `cliente_ciudad_id -> cliente_ciudad_nombre` | The city name is a property of the city, two hops from the key. |
-| `cliente_ciudad_id -> cliente_ciudad_pais` | Same for the country. |
-| `categoria_id -> categoria_nombre` | The category name is a property of the category. |
+| `cliente_id -> cliente_nombre` | `cliente_id` no es clave de esta tabla y, aun así, fija el nombre. |
+| `cliente_id -> cliente_email` | Lo mismo. |
+| `cliente_id -> cliente_ciudad_id` | Lo mismo, y esta además abre el tercer nivel de la cadena. |
+| `cliente_ciudad_id -> cliente_ciudad_nombre` | El nombre de la ciudad es una propiedad de la ciudad, a dos saltos de la clave. |
+| `cliente_ciudad_id -> cliente_ciudad_pais` | Lo mismo para el país. |
+| `categoria_id -> categoria_nombre` | El nombre de la categoría es una propiedad de la categoría. |
 
-**The three-level chain is the most interesting case in the dataset:**
+**La cadena de tres niveles es el caso más interesante del conjunto de datos:**
 
 ```
 venta_id ──> cliente_id ──> cliente_ciudad_id ──> cliente_ciudad_pais
-   (partial)    (transitive)      (transitive)
+   (parcial)    (transitiva)      (transitiva)
 ```
 
-A detector that collapses this to `venta_id -> cliente_ciudad_pais` and stops has lost the
-structure: normalizing that flat view produces a `ventas` table with a country column in it.
-The chain must survive as three separate arrows so the decomposition can place `ciudades`,
-`clientes`, and `ventas` in three separate tables.
+Un detector que colapse esto a `venta_id -> cliente_ciudad_pais` y se detenga ahí ha perdido
+la estructura: normalizar esa vista aplanada produce una tabla `ventas` con una columna de país
+dentro. La cadena debe sobrevivir como tres flechas separadas para que la descomposición pueda
+ubicar `ciudades`, `clientes` y `ventas` en tres tablas distintas.
 
-### Full — correctly stays put
+### Completas — permanecen en su lugar, y es correcto
 
-The **whole** composite key is required. These are the only true measures of the fact table
-and they stay in it.
+Se requiere la clave compuesta **completa**. Estas son las únicas medidas verdaderas de la
+tabla de hechos y permanecen en ella.
 
-| Dependency | Note |
+| Dependencia | Nota |
 | --- | --- |
-| `(venta_id, producto_id) -> cantidad` | Verified: neither `venta_id` alone nor `producto_id` alone determines it. |
-| `(venta_id, producto_id) -> subtotal` | Same. See the derived-attribute caveat below. |
+| `(venta_id, producto_id) -> cantidad` | Verificado: ni `venta_id` por sí solo ni `producto_id` por sí solo la determinan. |
+| `(venta_id, producto_id) -> subtotal` | Lo mismo. Véase más abajo la salvedad sobre el atributo derivado. |
 
-`cantidad` varies within every venta *and* across every producto on purpose. Had quantities
-been uniform, `producto_id -> cantidad` would hold by accident and the fact table would
-decompose away to nothing.
+`cantidad` varía dentro de cada venta *y* entre todos los productos de forma deliberada. Si las
+cantidades hubieran sido uniformes, `producto_id -> cantidad` se cumpliría por accidente y la
+tabla de hechos se descompondría hasta no quedar nada de ella.
 
 ---
 
-## Expected noise: true, but not the answer
+## Ruido esperado: verdaderas, pero no son la respuesta
 
-These dependencies **genuinely hold** in the 56 rows. A correct detector reports them.
-Do not grade them as errors — but do not confirm them into the normalizer either, because
-several would produce a wrong decomposition.
+Estas dependencias **se cumplen realmente** en las 56 filas. Un detector correcto las informa.
+No las califique como errores, pero tampoco las confirme en el normalizador, porque varias
+producirían una descomposición incorrecta.
 
-### Closure (8)
+### Cierre (8)
 
-Implied by transitivity over the answer key. `venta_id -> cliente_id` and
-`cliente_id -> cliente_email` together force `venta_id -> cliente_email`.
+Implicadas por transitividad sobre el solucionario. `venta_id -> cliente_id` y
+`cliente_id -> cliente_email` juntas fuerzan `venta_id -> cliente_email`.
 
 `venta_id -> cliente_nombre` · `venta_id -> cliente_email` · `venta_id -> cliente_ciudad_id` ·
 `venta_id -> cliente_ciudad_nombre` · `venta_id -> cliente_ciudad_pais` ·
 `cliente_id -> cliente_ciudad_nombre` · `cliente_id -> cliente_ciudad_pais` ·
 `producto_id -> categoria_nombre`
 
-> Confirming these into the normalizer is the classic mistake: it flattens the chain and
-> puts city and country columns back onto `ventas`.
+> Confirmarlas en el normalizador es el error clásico: aplana la cadena y devuelve las
+> columnas de ciudad y país a `ventas`.
 
-### Inverse (17)
+### Inversas (17)
 
-The right-hand side is a **candidate key** of its entity — names and emails happen to be
-unique — so the arrow also points back at the id.
+El lado derecho es una **clave candidata** de su entidad —los nombres y los correos resultan
+ser únicos—, de modo que la flecha también apunta de vuelta al id.
 
-| Determinant | Determines |
+| Determinante | Determina |
 | --- | --- |
 | `cliente_nombre` | `cliente_id`, `cliente_email`, `cliente_ciudad_id`, `cliente_ciudad_nombre`, `cliente_ciudad_pais` |
 | `cliente_email` | `cliente_id`, `cliente_nombre`, `cliente_ciudad_id`, `cliente_ciudad_nombre`, `cliente_ciudad_pais` |
@@ -165,128 +168,130 @@ unique — so the arrow also points back at the id.
 | `producto_nombre` | `producto_id`, `producto_precio`, `categoria_id`, `categoria_nombre` |
 | `categoria_nombre` | `categoria_id` |
 
-> These are real alternate keys, not artifacts. Choosing `cliente_nombre` as the determinant
-> would still normalize correctly — it would just key the `clientes` table on a name. The
-> surrogate id is the better choice, and that choice belongs to the user, not the detector.
+> Estas son claves alternativas reales, no artefactos. Elegir `cliente_nombre` como
+> determinante seguiría normalizando correctamente; simplemente daría a la tabla `clientes`
+> una clave basada en un nombre. El id subrogado es la mejor opción, y esa elección le
+> corresponde al usuario, no al detector.
 
-### Derived (2)
+### Derivadas (2)
 
 `subtotal -> cantidad` · `subtotal -> producto_precio`
 
-See the next section.
+Véase la sección siguiente.
 
 ---
 
-## Derived attribute: `subtotal`
+## Atributo derivado: `subtotal`
 
-**`subtotal = cantidad * producto_precio`, exactly, for all 56 rows.** This is intentional and
-it has consequences that read like detector bugs but are not.
+**`subtotal = cantidad * producto_precio`, exactamente, para las 56 filas.** Esto es intencional
+y tiene consecuencias que parecen errores del detector, pero no lo son.
 
-| Effect | Explanation |
+| Efecto | Explicación |
 | --- | --- |
-| `subtotal -> cantidad` and `subtotal -> producto_precio` are reported | With only 9 distinct prices, a given subtotal can almost always be factored one way. This says nothing about the business; it is arithmetic. |
-| `subtotal` has 36 distinct values over 56 rows | Its largest group is 4. It is the closest thing here to a near-unique column, and near-unique columns appear to determine things. |
-| Confirming either dependency corrupts the schema | It would move `cantidad` into a table keyed on `subtotal`. |
+| Se informan `subtotal -> cantidad` y `subtotal -> producto_precio` | Con solo 9 precios distintos, un subtotal dado casi siempre puede factorizarse de una única manera. Esto no dice nada sobre el negocio; es aritmética. |
+| `subtotal` tiene 36 valores distintos sobre 56 filas | Su grupo más grande es 4. Es lo más parecido a una columna casi única que hay aquí, y las columnas casi únicas parecen determinar cosas. |
+| Confirmar cualquiera de las dos dependencias corrompe el esquema | Trasladaría `cantidad` a una tabla cuya clave fuera `subtotal`. |
 
-**The correct handling is to leave `subtotal` in the fact table**, keyed on the full composite
-key, and to recognize that a strictly normalized design would not store it at all — it would
-compute it. The seed stores it because real denormalized tables store it, and the detector has
-to cope with that.
+**El manejo correcto es dejar `subtotal` en la tabla de hechos**, con la clave compuesta
+completa, y reconocer que un diseño estrictamente normalizado no lo almacenaría en absoluto:
+lo calcularía. La semilla lo almacena porque las tablas desnormalizadas reales lo almacenan, y
+el detector tiene que ser capaz de lidiar con eso.
 
-Two collisions were engineered specifically to stop this from getting worse:
+Se diseñaron dos colisiones específicamente para impedir que esto empeore:
 
-- **`producto_precio` 45.50 is shared by `Te verde 20 sobres` (102) and `Yogurt natural 1L`
-  (108).** Without it, all 10 prices would be distinct and `producto_precio` would appear to
-  determine the product name, the category, and everything downstream. It determines nothing.
-- **`fecha_venta` 2024-03-11 is shared by ventas 3 and 4**, whose clientes sit in different
-  ciudades *and* different paises. The shared date kills `fecha_venta -> venta_id` and
-  `fecha_venta -> cliente_id`; the contrasting cities kill the coincidental
+- **El `producto_precio` 45.50 es compartido por `Te verde 20 sobres` (102) y `Yogurt natural 1L`
+  (108).** Sin esa colisión, los 10 precios serían distintos y `producto_precio` parecería
+  determinar el nombre del producto, la categoría y todo lo que sigue. No determina nada.
+- **La `fecha_venta` 2024-03-11 es compartida por las ventas 3 y 4**, cuyos clientes residen en
+  ciudades distintas *y* en países distintos. La fecha compartida elimina `fecha_venta -> venta_id`
+  y `fecha_venta -> cliente_id`; las ciudades contrastantes eliminan la coincidencia
   `fecha_venta -> cliente_ciudad_*`.
 
 ---
 
-## The expected 3NF decomposition
+## La descomposición 3FN esperada
 
-Six tables. Read top-down: each one depends only on the tables above it.
+Seis tablas. Léase de arriba abajo: cada una depende únicamente de las tablas que la preceden.
 
-### 1. `ciudades` — 3 rows
-
-| | |
-| --- | --- |
-| Primary key | `ciudad_id` |
-| Columns | `ciudad_id`, `ciudad_nombre`, `ciudad_pais` |
-| Foreign keys | none |
-| From | `cliente_ciudad_id`, `cliente_ciudad_nombre`, `cliente_ciudad_pais` |
-| Justified by | `cliente_ciudad_id -> cliente_ciudad_nombre`, `cliente_ciudad_id -> cliente_ciudad_pais` |
-
-### 2. `categorias` — 4 rows
+### 1. `ciudades` — 3 filas
 
 | | |
 | --- | --- |
-| Primary key | `categoria_id` |
-| Columns | `categoria_id`, `categoria_nombre` |
-| Foreign keys | none |
-| From | `categoria_id`, `categoria_nombre` |
-| Justified by | `categoria_id -> categoria_nombre` |
+| Clave primaria | `ciudad_id` |
+| Columnas | `ciudad_id`, `ciudad_nombre`, `ciudad_pais` |
+| Claves foráneas | ninguna |
+| Procedente de | `cliente_ciudad_id`, `cliente_ciudad_nombre`, `cliente_ciudad_pais` |
+| Justificada por | `cliente_ciudad_id -> cliente_ciudad_nombre`, `cliente_ciudad_id -> cliente_ciudad_pais` |
 
-### 3. `clientes` — 5 rows
-
-| | |
-| --- | --- |
-| Primary key | `cliente_id` |
-| Columns | `cliente_id`, `cliente_nombre`, `cliente_email`, `cliente_ciudad_id` |
-| Foreign keys | `cliente_ciudad_id` → `ciudades(ciudad_id)` |
-| From | `cliente_id`, `cliente_nombre`, `cliente_email`, `cliente_ciudad_id` |
-| Justified by | `cliente_id -> cliente_nombre`, `cliente_id -> cliente_email`, `cliente_id -> cliente_ciudad_id` |
-
-### 4. `productos` — 10 rows
+### 2. `categorias` — 4 filas
 
 | | |
 | --- | --- |
-| Primary key | `producto_id` |
-| Columns | `producto_id`, `producto_nombre`, `producto_precio`, `categoria_id` |
-| Foreign keys | `categoria_id` → `categorias(categoria_id)` |
-| From | `producto_id`, `producto_nombre`, `producto_precio`, `categoria_id` |
-| Justified by | `producto_id -> producto_nombre`, `producto_id -> producto_precio`, `producto_id -> categoria_id` |
+| Clave primaria | `categoria_id` |
+| Columnas | `categoria_id`, `categoria_nombre` |
+| Claves foráneas | ninguna |
+| Procedente de | `categoria_id`, `categoria_nombre` |
+| Justificada por | `categoria_id -> categoria_nombre` |
 
-### 5. `ventas` — 8 rows
-
-| | |
-| --- | --- |
-| Primary key | `venta_id` |
-| Columns | `venta_id`, `fecha_venta`, `cliente_id` |
-| Foreign keys | `cliente_id` → `clientes(cliente_id)` |
-| From | `venta_id`, `fecha_venta`, `cliente_id` |
-| Justified by | `venta_id -> fecha_venta`, `venta_id -> cliente_id` |
-
-### 6. `ventas_detalle` — 56 rows (the fact table)
+### 3. `clientes` — 5 filas
 
 | | |
 | --- | --- |
-| Primary key | `(venta_id, producto_id)` — composite |
-| Columns | `venta_id`, `producto_id`, `cantidad`, `subtotal` |
-| Foreign keys | `venta_id` → `ventas(venta_id)`, `producto_id` → `productos(producto_id)` |
-| From | `venta_id`, `producto_id`, `cantidad`, `subtotal` |
-| Justified by | Nothing smaller than the full key determines `cantidad` or `subtotal`. |
+| Clave primaria | `cliente_id` |
+| Columnas | `cliente_id`, `cliente_nombre`, `cliente_email`, `cliente_ciudad_id` |
+| Claves foráneas | `cliente_ciudad_id` → `ciudades(ciudad_id)` |
+| Procedente de | `cliente_id`, `cliente_nombre`, `cliente_email`, `cliente_ciudad_id` |
+| Justificada por | `cliente_id -> cliente_nombre`, `cliente_id -> cliente_email`, `cliente_id -> cliente_ciudad_id` |
 
-### Why the order matters
+### 4. `productos` — 10 filas
 
-2NF and 3NF each do one half of this work, and the split is visible in the result:
+| | |
+| --- | --- |
+| Clave primaria | `producto_id` |
+| Columnas | `producto_id`, `producto_nombre`, `producto_precio`, `categoria_id` |
+| Claves foráneas | `categoria_id` → `categorias(categoria_id)` |
+| Procedente de | `producto_id`, `producto_nombre`, `producto_precio`, `categoria_id` |
+| Justificada por | `producto_id -> producto_nombre`, `producto_id -> producto_precio`, `producto_id -> categoria_id` |
 
-| Step | Produces | Driven by |
+### 5. `ventas` — 8 filas
+
+| | |
+| --- | --- |
+| Clave primaria | `venta_id` |
+| Columnas | `venta_id`, `fecha_venta`, `cliente_id` |
+| Claves foráneas | `cliente_id` → `clientes(cliente_id)` |
+| Procedente de | `venta_id`, `fecha_venta`, `cliente_id` |
+| Justificada por | `venta_id -> fecha_venta`, `venta_id -> cliente_id` |
+
+### 6. `ventas_detalle` — 56 filas (la tabla de hechos)
+
+| | |
+| --- | --- |
+| Clave primaria | `(venta_id, producto_id)` — compuesta |
+| Columnas | `venta_id`, `producto_id`, `cantidad`, `subtotal` |
+| Claves foráneas | `venta_id` → `ventas(venta_id)`, `producto_id` → `productos(producto_id)` |
+| Procedente de | `venta_id`, `producto_id`, `cantidad`, `subtotal` |
+| Justificada por | Nada menor que la clave completa determina `cantidad` ni `subtotal`. |
+
+### Por qué importa el orden
+
+La 2FN y la 3FN hacen cada una la mitad de este trabajo, y la división se aprecia en el resultado:
+
+| Paso | Produce | Impulsado por |
 | --- | --- | --- |
-| 2NF | `ventas`, `productos`, `ventas_detalle` | The five partial dependencies. |
-| 3NF | `clientes` (out of `ventas`), `ciudades` (out of `clientes`), `categorias` (out of `productos`) | The six transitive dependencies. |
+| 2FN | `ventas`, `productos`, `ventas_detalle` | Las cinco dependencias parciales. |
+| 3FN | `clientes` (a partir de `ventas`), `ciudades` (a partir de `clientes`), `categorias` (a partir de `productos`) | Las seis dependencias transitivas. |
 
-`ciudades` is only reachable in the second pass, because `cliente_ciudad_id` does not become a
-non-key attribute of a smaller table until `clientes` exists. That is the chain doing its job.
+`ciudades` solo es alcanzable en la segunda pasada, porque `cliente_ciudad_id` no se convierte
+en atributo no clave de una tabla más pequeña hasta que existe `clientes`. Eso es la cadena
+cumpliendo su función.
 
-### Row-count check
+### Comprobación del recuento de filas
 
-The decomposition is lossless: `56 = 56`. Joining all six tables back must reproduce
-`ventas_raw` exactly, 56 rows, no duplicates and no drops.
+La descomposición es sin pérdida: `56 = 56`. Volver a unir las seis tablas debe reproducir
+`ventas_raw` exactamente, 56 filas, sin duplicados y sin pérdidas.
 
-| Table | Rows |
+| Tabla | Filas |
 | --- | ---: |
 | `ciudades` | 3 |
 | `categorias` | 4 |
@@ -295,43 +300,44 @@ The decomposition is lossless: `56 = 56`. Joining all six tables back must repro
 | `ventas` | 8 |
 | `ventas_detalle` | 56 |
 
-The storage win is the point: `cliente_email` is written 5 times instead of 56, and
-`cliente_ciudad_pais` 3 times instead of 56.
+La ganancia en almacenamiento es el objetivo: `cliente_email` se escribe 5 veces en lugar de 56,
+y `cliente_ciudad_pais` 3 veces en lugar de 56.
 
 ---
 
-## Grading checklist
+## Lista de verificación para calificar
 
-- [ ] All 5 partial dependencies detected.
-- [ ] All 6 transitive dependencies detected.
-- [ ] Both full dependencies detected on the composite key.
-- [ ] The chain `venta_id -> cliente_id -> cliente_ciudad_id -> cliente_ciudad_pais` survives as
-      three separate arrows, not one collapsed arrow.
-- [ ] No dependency reported outside the answer key + expected noise (38 total at determinant size 1).
-- [ ] Nothing flagged vacuous — no determinant in this table is all-unique.
-- [ ] Decomposition yields exactly the six tables above, with those keys and those foreign keys.
-- [ ] `subtotal` stayed in `ventas_detalle`; nothing was keyed on it.
-- [ ] Rejoining the six tables reproduces all 56 original rows.
+- [ ] Se detectaron las 5 dependencias parciales.
+- [ ] Se detectaron las 6 dependencias transitivas.
+- [ ] Se detectaron ambas dependencias completas sobre la clave compuesta.
+- [ ] La cadena `venta_id -> cliente_id -> cliente_ciudad_id -> cliente_ciudad_pais` sobrevive como
+      tres flechas separadas, no como una sola flecha colapsada.
+- [ ] No se informó ninguna dependencia fuera del solucionario + el ruido esperado (38 en total con determinantes de tamaño 1).
+- [ ] Nada quedó marcado como vacuo: ningún determinante de esta tabla es completamente único.
+- [ ] La descomposición produce exactamente las seis tablas anteriores, con esas claves y esas claves foráneas.
+- [ ] `subtotal` permaneció en `ventas_detalle`; nada quedó con clave basada en él.
+- [ ] Volver a unir las seis tablas reproduce las 56 filas originales.
 
 ---
 
-## Maintenance
+## Mantenimiento
 
-Edit `ventasRawFixture.ts` and regenerate the SQL — never hand-edit `seed_ventas_raw.sql`.
-The fixture builds rows by joining entity objects rather than repeating values, so a typo in a
-repeated `cliente_nombre` is not expressible. That property is the reason the answer key can
-be trusted.
+Edite `ventasRawFixture.ts` y regenere el SQL; nunca edite `seed_ventas_raw.sql` a mano.
+El fixture construye las filas uniendo objetos de entidad en lugar de repetir valores, de modo
+que una errata en un `cliente_nombre` repetido no es expresable. Esa propiedad es la razón por
+la que se puede confiar en el solucionario.
 
-If you change the data, re-derive this document. A stale answer key is worse than none: it
-fails correct detectors and passes broken ones.
+Si cambia los datos, vuelva a derivar este documento. Un solucionario desactualizado es peor que
+no tener ninguno: reprueba a los detectores correctos y aprueba a los defectuosos.
 
-`ventasRawFixture.ts` also exports the two lists above as data (`expectedDependencies` and
-`expectedIncidentalDependencies`) so tests assert against them directly instead of against
-prose.
+`ventasRawFixture.ts` también exporta las dos listas anteriores como datos (`expectedDependencies`
+y `expectedIncidentalDependencies`) para que las pruebas se validen directamente contra ellas y no
+contra la prosa.
 
-### Fixture representation note
+### Nota sobre la representación en el fixture
 
-The fixture models `numeric(10,2)` as a JavaScript `number`. The `pg` driver returns `numeric`
-as a **string** by default, so the ingestion adapter must coerce it, or detection over the live
-database will compare `"85.00"` where the fixture compares `85`. Equality-based FD detection
-gives the same answer either way; anything doing arithmetic does not.
+El fixture modela `numeric(10,2)` como un `number` de JavaScript. El controlador `pg` devuelve
+`numeric` como **cadena de texto** de forma predeterminada, así que el adaptador de ingesta debe
+convertirlo, o la detección sobre la base de datos real comparará `"85.00"` donde el fixture
+compara `85`. La detección de dependencias funcionales basada en igualdad da la misma respuesta en
+cualquier caso; cualquier cosa que haga aritmética, no.

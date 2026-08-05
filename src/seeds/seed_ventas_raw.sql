@@ -1,38 +1,40 @@
 -- =============================================================================
--- ventas_raw -- the unnormalized source table this project starts from.
+-- ventas_raw -- la tabla de origen sin normalizar de la que parte este proyecto.
 --
--- WHAT THIS IS
---   One flat sales table carrying customer, city, product and category
---   attributes inline. It is INTENTIONALLY DENORMALIZED: it violates 2NF and
---   3NF by design. Do not "fix" it -- decomposing it is the whole exercise.
+-- QUÉ ES ESTO
+--   Una única tabla plana de ventas que lleva en línea los atributos de
+--   cliente, ciudad, producto y categoría. Está INTENCIONALMENTE DESNORMALIZADA:
+--   viola la 2FN y la 3FN por diseño. No la "corrija" -- descomponerla es todo
+--   el ejercicio.
 --
---   Every redundancy here is deliberate and documented in
---   src/seeds/GROUND_TRUTH.md, which is the answer key the detection engine is
---   graded against. src/seeds/ventasRawFixture.ts holds the identical data as
---   an in-memory fixture; the two must never diverge.
+--   Cada redundancia que hay aquí es deliberada y está documentada en
+--   src/seeds/GROUND_TRUTH.md, que es el solucionario con el que se califica el
+--   motor de detección. src/seeds/ventasRawFixture.ts contiene los mismos datos
+--   como fixture en memoria; los dos nunca deben divergir.
 --
--- HOW TO LOAD
---   This script is executed INTO a schema (`staging` by default), so the table
---   name carries no schema prefix. Set the search_path before running it:
+-- CÓMO CARGARLA
+--   Este script se ejecuta DENTRO de un esquema (`staging` de forma
+--   predeterminada), así que el nombre de la tabla no lleva prefijo de esquema.
+--   Configure el search_path antes de ejecutarlo:
 --
 --     CREATE SCHEMA IF NOT EXISTS staging;
 --     SET search_path TO staging;
 --     \i src/seeds/seed_ventas_raw.sql
 --
---   Re-runnable: the table is dropped and recreated.
+--   Reejecutable: la tabla se elimina y se vuelve a crear.
 --
--- SHAPE
---   56 rows built from 8 ventas, 10 productos,
---   5 clientes across 3 ciudades, and 4 categorias.
---   Grain / primary key: (venta_id, producto_id) -- one row per product line
---   of a sale.
+-- FORMA
+--   56 filas construidas a partir de 8 ventas, 10 productos,
+--   5 clientes distribuidos en 3 ciudades y 4 categorias.
+--   Grano / clave primaria: (venta_id, producto_id) -- una fila por línea de
+--   producto de una venta.
 --
---   subtotal is DERIVED: subtotal = cantidad * producto_precio, exact for every
---   row. That is on purpose, and it makes the detector report extra true-but-
---   uninteresting dependencies. See the "Derived attribute" section of
---   GROUND_TRUTH.md before filing that as a bug.
+--   subtotal es DERIVADO: subtotal = cantidad * producto_precio, exacto para
+--   cada fila. Eso es a propósito, y hace que el detector informe dependencias
+--   adicionales verdaderas pero poco interesantes. Consulte la sección
+--   "Atributo derivado" de GROUND_TRUTH.md antes de reportarlo como un error.
 --
--- GENERATED FROM src/seeds/ventasRawFixture.ts -- edit the fixture, not this file.
+-- GENERADO A PARTIR DE src/seeds/ventasRawFixture.ts -- edite el fixture, no este archivo.
 -- =============================================================================
 
 DROP TABLE IF EXISTS ventas_raw;
@@ -54,13 +56,14 @@ CREATE TABLE ventas_raw (
   cantidad              integer       NOT NULL,
   subtotal              numeric(10,2) NOT NULL,
 
-  -- The composite key is what makes the 2NF violations violations: fecha_venta
-  -- and cliente_id depend on venta_id alone, producto_* on producto_id alone.
+  -- La clave compuesta es lo que convierte en violaciones a las violaciones de
+  -- 2FN: fecha_venta y cliente_id dependen solo de venta_id, y producto_*
+  -- depende solo de producto_id.
   CONSTRAINT ventas_raw_pkey PRIMARY KEY (venta_id, producto_id)
 );
 
 COMMENT ON TABLE ventas_raw IS
-  'Intentionally denormalized sales table. Seed data for automatic 3NF decomposition; see src/seeds/GROUND_TRUTH.md.';
+  'Tabla de ventas desnormalizada a propósito. Datos semilla para la descomposición automática a 3FN; ver src/seeds/GROUND_TRUTH.md.';
 
 INSERT INTO ventas_raw (
   venta_id,
