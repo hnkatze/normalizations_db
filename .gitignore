@@ -45,3 +45,7 @@ next-env.d.ts
 .kiro
 skills-lock.json
 context.md
+
+# Agent instruction files (kept locally, not published)
+CLAUDE.md
+AGENTS.md
