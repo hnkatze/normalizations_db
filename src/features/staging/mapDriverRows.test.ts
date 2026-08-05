@@ -34,8 +34,8 @@ describe("mapDriverRows", () => {
   })
 
   it("serializes a BigInt cell to its decimal string instead of letting JSON.stringify throw", () => {
-    // BigInt() call, not a `123n` literal: the project's tsconfig targets
-    // ES2017, which does not support BigInt literal syntax.
+    // Llamada a BigInt(), no un literal `123n`: el tsconfig del proyecto apunta a
+    // ES2017, que no admite la sintaxis de literales BigInt.
     const result = mapDriverRows([{ total: BigInt("9007199254740993") }])
     expect(result).toEqual([{ total: "9007199254740993" }])
   })

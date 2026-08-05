@@ -3,22 +3,22 @@ import type { CellValue, Row } from "@/domain"
 import { isRecord } from "./isRecord"
 
 /**
- * Narrows one driver-returned cell into the domain `CellValue` union.
+ * Reduce una celda devuelta por el driver a la unión `CellValue` del dominio.
  *
- * `pg` returns `Date` objects for timestamp columns, and can hand back
- * other non-primitive shapes (arrays, JSON objects) depending on column
- * type. None of those are part of `CellValue`, so anything that is not
- * already a string, number, boolean, or null is serialized to a string
- * rather than smuggled through as `unknown`/`any`.
+ * `pg` devuelve objetos `Date` para columnas de timestamp, y puede devolver
+ * otras formas no primitivas (arreglos, objetos JSON) dependiendo del tipo de
+ * columna. Ninguna de esas formas es parte de `CellValue`, así que cualquier valor que
+ * no sea ya un string, número, booleano o null se serializa a un string
+ * en lugar de dejarlo pasar como `unknown`/`any`.
  *
- * `bigint` gets its own branch ahead of the generic fallback: `pg`'s
- * default type parsers return `int8`/`bigint` columns as `string`, so this
- * branch is not reachable under this adapter's configuration (no
- * `pg.types.setTypeParser` override is registered anywhere in this
- * codebase). It is handled explicitly anyway, converting to a decimal
- * string, because `JSON.stringify` throws a `TypeError` on a `BigInt` — if
- * a future change ever registered a custom parser that returns one, this
- * keeps the mapper failing safely (a value) instead of throwing.
+ * `bigint` tiene su propia rama antes del caso genérico de respaldo: los
+ * parsers de tipo por defecto de `pg` devuelven las columnas `int8`/`bigint` como `string`,
+ * así que esta rama no es alcanzable bajo la configuración de este adaptador (no hay
+ * ninguna sobrescritura de `pg.types.setTypeParser` registrada en ninguna parte de este
+ * código base). Aun así se maneja explícitamente, convirtiendo a un string
+ * decimal, porque `JSON.stringify` lanza un `TypeError` con un `BigInt` — si
+ * algún cambio futuro llegara a registrar un parser personalizado que devuelva uno, esto
+ * mantiene al mapeador fallando de forma segura (un valor) en lugar de lanzar una excepción.
  */
 function toCellValue(value: unknown): CellValue {
   if (value === null || value === undefined) {
@@ -36,7 +36,7 @@ function toCellValue(value: unknown): CellValue {
   return JSON.stringify(value)
 }
 
-/** Maps a driver result set (`unknown` rows) into the domain `Row[]` shape. */
+/** Mapea un conjunto de resultados del driver (filas `unknown`) a la forma `Row[]` del dominio. */
 export function mapDriverRows(rows: readonly unknown[]): readonly Row[] {
   return rows.map((row, index) => {
     if (!isRecord(row)) {

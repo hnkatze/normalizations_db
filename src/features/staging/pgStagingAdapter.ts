@@ -12,19 +12,19 @@ import type { StagedTable, StagingError, StagingPort } from "./stagingPort"
 import { quoteStagingSchemaName, type StagingSchemaName } from "./stagingSchemaName"
 
 /**
- * `pg`-backed implementation of `StagingPort`.
+ * Implementación de `StagingPort` respaldada por `pg`.
  *
- * SECURITY: this adapter executes arbitrary user-uploaded SQL by design —
- * Postgres itself is used as the SQL parser instead of hand-rolling one for
- * the FD-detection pipeline. That trade-off is only acceptable because the
- * connecting role's blast radius is limited to the staging schema, which is
- * dropped and recreated on every run. The pool created here MUST connect as
- * a least-privilege role scoped to that schema (e.g. `CREATE`/`USAGE` on the
- * staging schema only, no other schema, no superuser attributes, no access
- * to the application's own tables). Connecting as a superuser, or as the
- * role that owns the application's data, turns "upload a .sql file" into
- * "run any statement as the database owner" — `DROP DATABASE`, reading
- * other tenants' data, creating extensions, anything.
+ * SEGURIDAD: este adaptador ejecuta SQL arbitrario subido por el usuario por diseño —
+ * se usa el propio Postgres como analizador de SQL en lugar de escribir uno a mano para
+ * el pipeline de detección de dependencias funcionales. Esa concesión solo es aceptable porque el
+ * radio de impacto del rol de conexión está limitado al esquema de staging, el cual se
+ * elimina y se vuelve a crear en cada ejecución. El pool creado aquí DEBE conectarse como
+ * un rol de privilegio mínimo acotado a ese esquema (por ejemplo, `CREATE`/`USAGE` únicamente
+ * sobre el esquema de staging, ningún otro esquema, ningún atributo de superusuario, ningún acceso
+ * a las propias tablas de la aplicación). Conectarse como superusuario, o como el
+ * rol dueño de los datos de la aplicación, convierte "subir un archivo .sql" en
+ * "ejecutar cualquier sentencia como el dueño de la base de datos" — `DROP DATABASE`, leer
+ * los datos de otros inquilinos, crear extensiones, cualquier cosa.
  */
 export function createPgStagingAdapter(databaseUrl: DatabaseUrl): StagingPort {
   const pool = new Pool({ connectionString: databaseUrl })
@@ -55,11 +55,11 @@ export function createPgStagingAdapter(databaseUrl: DatabaseUrl): StagingPort {
 
     try {
       await client.query(`SET search_path TO ${quotedSchema}`)
-      // The uploaded script cannot be parameterized: it is arbitrary,
-      // multi-statement DDL/DML, not a single query with a fixed shape.
-      // Postgres is trusted to parse and execute it — see the module-level
-      // SECURITY note on why that trust boundary requires a least-privilege
-      // connecting role.
+      // El script subido no puede parametrizarse: es DDL/DML arbitrario y de
+      // múltiples sentencias, no una única consulta de forma fija.
+      // Se confía en Postgres para analizarlo y ejecutarlo — ver la nota de
+      // SEGURIDAD a nivel de módulo sobre por qué ese límite de confianza requiere un
+      // rol de conexión de privilegio mínimo.
       await client.query(sql)
       return ok(undefined)
     } catch (e) {
@@ -120,7 +120,11 @@ export function createPgStagingAdapter(databaseUrl: DatabaseUrl): StagingPort {
     }
   }
 
-  return { resetSchema, runScript, discoverCreatedTable, readRows }
+  async function close(): Promise<void> {
+    await pool.end()
+  }
+
+  return { resetSchema, runScript, discoverCreatedTable, readRows, close }
 }
 
 function messageOf(e: unknown): string {
@@ -128,12 +132,12 @@ function messageOf(e: unknown): string {
 }
 
 /**
- * The `Record<string, unknown>` on `pool.query`'s rows is a type parameter
- * we asserted, not a guarantee the driver enforces at runtime. Row-mode
- * settings or a future `pg` version could hand back something else, so this
- * still narrows with `isRecord` before touching a field — the same
- * discipline applied to every other row from an `information_schema` or
- * data query in this adapter (see `mapDriverRows.ts`,
+ * El `Record<string, unknown>` en las filas de `pool.query` es un parámetro de tipo
+ * que nosotros aseveramos, no una garantía que el driver imponga en tiempo de ejecución. Los
+ * ajustes de modo de fila o una futura versión de `pg` podrían devolver otra cosa, así que esto
+ * igual reduce el tipo con `isRecord` antes de tocar un campo — la misma
+ * disciplina aplicada a cualquier otra fila proveniente de `information_schema` o de una
+ * consulta de datos en este adaptador (ver `mapDriverRows.ts`,
  * `mapInformationSchemaColumns.ts`).
  */
 function readTableName(row: unknown): string {
