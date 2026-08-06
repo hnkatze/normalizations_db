@@ -20,6 +20,29 @@
    The `.dark` token block is intentionally absent for the same reason. */
 @custom-variant dark (&:is(.dark *));
 
+/*
+  Variante de altura, usada por el hero de carga (UploadHero) para achicar
+  tipografía, paddings y la zona de drop en viewports bajos: celular en
+  apaisado, ventanas de escritorio poco altas (1280x720, 1440x900) y zoom del
+  navegador al 200% (que reduce el alto CSS efectivo a la mitad).
+
+  El que quepa sin scroll ya NO depende de esto: la cadena flex (`min-h-dvh`
+  en <body>, `flex-1 min-h-0` en cada eslabón hasta el hero) reparte el alto
+  real del navegador sola, sin ninguna cuenta hecha a mano. Esta variante es
+  una mejora aparte: reduce el tamaño real del contenido para que una porción
+  más grande de los viewports bajos entre sin necesitar el scroll de
+  fallback, en vez de depender de él siempre. El corte en 900px deja 1440x900
+  del lado compacto y 1920x1080 del lado espacioso.
+
+  Es una media query, no un selector, así que —a diferencia de `dark`
+  arriba— usa la forma de bloque con `@slot`.
+*/
+@custom-variant short {
+  @media (max-height: 900px) {
+    @slot;
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -116,5 +139,46 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+/*
+  Hero de carga (src/features/sql-upload/UploadHero.tsx): entrada escalonada
+  al montar y feedback de arrastre. Las utilidades `animate-in`, `fade-in-0`,
+  `slide-in-from-bottom-2`, `duration-*` y `delay-*` ya las resuelve
+  tw-animate-css (importado arriba); acá solo se agrega lo que no trae de
+  fábrica: la barra de progreso indeterminada del estado "analizando".
+*/
+@layer utilities {
+  @keyframes upload-progress-indeterminate {
+    0% {
+      transform: translateX(-100%);
+    }
+    50% {
+      transform: translateX(20%);
+    }
+    100% {
+      transform: translateX(120%);
+    }
+  }
+
+  .upload-hero-progress-bar {
+    animation: upload-progress-indeterminate 1.2s ease-in-out infinite;
+  }
+}
+
+/*
+  `prefers-reduced-motion: reduce` anula TODO el movimiento que agrega el
+  hero de carga, no solo lo que ya cubriría la variante `motion-reduce:` de
+  Tailwind puesta elemento por elemento. Va deliberadamente fuera de
+  cualquier `@layer`: una regla sin capa le gana en cascada a cualquier
+  utilidad de Tailwind (que sí vive en capas), sin importar el orden ni la
+  especificidad — así no hace falta perseguir cada utilidad con `!important`.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .upload-hero-motion {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
   }
 }

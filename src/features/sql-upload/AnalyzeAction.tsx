@@ -3,7 +3,7 @@ import { Loader2Icon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { AnalysisState } from "./analysisState"
 
-/** Exportado para que `SqlUploadCard` pueda conectar el `aria-describedby` del botón Analyze a esta región. */
+/** Exportado para que `UploadHero` pueda conectar el `aria-describedby` del botón Analyze a esta región. */
 export const ANALYSIS_STATUS_ID = "sql-analysis-status"
 
 type AnalyzeActionProps = {

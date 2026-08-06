@@ -5,94 +5,122 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { NormalizationGateChecklist } from "./NormalizationGateChecklist"
-import type { NormalizationGate } from "./normalizationGates"
-import { NormalizedTableCard } from "./NormalizedTableCard"
-import type { NormalizationOutcome } from "./normalizationOutcome"
+import type { NormalForm } from "@/domain"
+import { NormalFormStagePanel } from "./NormalFormStagePanel"
+import type { NormalizationOutcome, NormalizationStageView } from "./normalizationOutcome"
 import { summarizeSchema, type SchemaSummary } from "./schemaSummary"
 
-const SCHEMA_STATUS_ID = "normalized-schema-status"
 const DDL_LABEL_ID = "normalized-ddl-label"
 
 type NormalizedSchemaSectionProps = {
   readonly originalTableName: string
   readonly originalColumnCount: number
   readonly confirmedDependencyCount: number
-  readonly gates: readonly NormalizationGate[]
+  readonly primaryKeyColumnCount: number
+  readonly normalForm: NormalForm
   readonly outcome: NormalizationOutcome
 }
 
 /**
- * El esquema 3NF resultante: una tarjeta por tabla, el DDL generado y una
- * línea de resumen. Este es el resultado por el cual existe el paso de
- * confirmación, así que permanece visible y sustancial en lugar de quedar
- * relegado como un detalle secundario.
+ * Una etapa de la descomposición, sola y con todo el ancho.
+ *
+ * Antes las tres etapas convivían en pestañas dentro de una tarjeta angosta,
+ * en una pantalla que además mostraba la tabla y las reglas al mismo tiempo.
+ * Ahora el recorrido vive en el paso, no acá: este componente muestra UNA
+ * etapa y nada más, que es lo que le devuelve el aire.
  */
 export function NormalizedSchemaSection({
   originalTableName,
   originalColumnCount,
   confirmedDependencyCount,
-  gates,
+  primaryKeyColumnCount,
+  normalForm,
   outcome,
 }: NormalizedSchemaSectionProps) {
+  const found = stageFor(outcome, normalForm)
+  const stage = found?.current ?? null
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Esquema 3FN resultante</CardTitle>
+        <CardTitle as="h3">Esquema en {labelOf(normalForm)}</CardTitle>
         <CardDescription>
-          Generado en vivo a partir de la clave primaria y las dependencias que confirmas arriba.
-          No se escribe nada en una base de datos.
+          Generado en vivo a partir de la clave primaria y las reglas que confirmaste. No se
+          escribe nada en ninguna base de datos.
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-6">
-        <div className="flex min-h-5 flex-col gap-2">
+      <CardContent className="flex flex-col gap-4">
+        {stage === null ? (
           <p
-            id={SCHEMA_STATUS_ID}
             aria-live="polite"
-            className={outcome.kind === "error" ? "text-sm text-destructive" : "text-sm text-muted-foreground"}
+            className={
+              outcome.kind === "error"
+                ? "text-sm text-destructive"
+                : "text-sm text-muted-foreground"
+            }
           >
             {statusMessage(outcome)}
           </p>
-          {outcome.kind === "empty" ? <NormalizationGateChecklist gates={gates} /> : null}
-        </div>
-
-        {outcome.kind === "ready" ? (
+        ) : (
           <>
             <p className="text-sm text-foreground">
               {summaryLine(
                 summarizeSchema(
                   originalTableName,
                   originalColumnCount,
-                  outcome.schema,
+                  stage.schema,
                   confirmedDependencyCount,
                 ),
               )}
             </p>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {outcome.schema.tables.map((table) => (
-                <NormalizedTableCard key={table.name} table={table} />
-              ))}
-            </div>
+            <NormalFormStagePanel
+              stage={stage}
+              previousStage={found?.previous ?? null}
+              originalTableName={originalTableName}
+              primaryKeyColumnCount={primaryKeyColumnCount}
+              ddlLabelId={DDL_LABEL_ID}
+            />
 
-            <div className="flex flex-col gap-2">
-              <span id={DDL_LABEL_ID} className="text-sm font-medium text-foreground">
-                DDL generado
-              </span>
-              <pre
-                tabIndex={0}
-                role="region"
-                aria-labelledby={DDL_LABEL_ID}
-                className="overflow-x-auto rounded-lg border border-border bg-muted/40 p-4 font-mono text-xs text-foreground"
-              >
-                <code>{outcome.ddl}</code>
-              </pre>
-            </div>
+            <span id={DDL_LABEL_ID} className="sr-only">
+              DDL generado para {labelOf(normalForm)}
+            </span>
           </>
-        ) : null}
+        )}
       </CardContent>
     </Card>
   )
+}
+
+/**
+ * La etapa pedida junto con la que viene inmediatamente antes, o `null`
+ * cuando todavía no hay esquema.
+ *
+ * La etapa se ubica por su propia forma normal y no por un índice fijo: cada
+ * etapa ya sabe cuál es. La ANTERIOR sí sale de la posición, porque el orden
+ * de la tupla es precisamente lo que significa "anterior", y hace falta para
+ * poder contar qué cambió de una a otra.
+ */
+function stageFor(
+  outcome: NormalizationOutcome,
+  normalForm: NormalForm,
+): { readonly current: NormalizationStageView; readonly previous: NormalizationStageView | null } | null {
+  if (outcome.kind !== "ready") {
+    return null
+  }
+
+  const index = outcome.stages.findIndex((stage) => stage.schema.normalForm === normalForm)
+  const current = index < 0 ? undefined : outcome.stages[index]
+  if (current === undefined) {
+    return null
+  }
+
+  return { current, previous: index === 0 ? null : (outcome.stages[index - 1] ?? null) }
+}
+
+/** `3NF` es el vocabulario del dominio; `3FN` es el del usuario. */
+function labelOf(normalForm: NormalForm): string {
+  return normalForm.replace("NF", "FN")
 }
 
 function statusMessage(outcome: NormalizationOutcome): string {
@@ -102,7 +130,7 @@ function statusMessage(outcome: NormalizationOutcome): string {
     case "error":
       return `No se pudo generar un esquema: ${outcome.message}`
     case "ready":
-      return `Esquema actualizado: se generaron ${outcome.schema.tables.length} tablas.`
+      return "Esta etapa no está disponible para el esquema actual."
     default: {
       const _never: never = outcome
       throw new Error(`NormalizedSchemaSection: unhandled outcome ${String(_never)}`)

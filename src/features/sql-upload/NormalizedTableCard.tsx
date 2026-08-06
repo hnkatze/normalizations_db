@@ -28,7 +28,7 @@ export function NormalizedTableCard({ table }: NormalizedTableCardProps) {
   return (
     <Card size="sm" className="flex flex-col gap-3">
       <CardHeader>
-        <CardTitle className="font-mono">{table.name}</CardTitle>
+        <CardTitle as="h4" className="font-mono">{table.name}</CardTitle>
         <CardDescription>
           Clave primaria: <span className="font-mono text-foreground">{table.primaryKey.join(", ")}</span>
         </CardDescription>

@@ -1,71 +1,67 @@
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react"
+"use client"
 
 import { Button } from "@/components/ui/button"
-
-const PAGE_STATUS_ID = "dependency-page-status"
 
 type DependencyPaginationProps = {
   readonly pageNumber: number
   readonly pageCount: number
-  readonly onPageChange: (page: number) => void
+  readonly firstItemNumber: number
+  readonly lastItemNumber: number
+  readonly totalItems: number
+  readonly onPageChange: (pageNumber: number) => void
 }
 
 /**
- * Controles de anterior/siguiente para la tabla de dependencias. Botones
- * reales, no enlaces — esto cambia lo que se renderiza, no la ubicación.
- * Los límites usan `aria-disabled` (manteniéndose enfocables, como en el
- * resto de esta aplicación) en lugar del atributo nativo `disabled`, y la
- * página actual se anuncia mediante una región activa persistente y educada (polite).
+ * Navegación entre páginas de reglas.
+ *
+ * Dice el rango además del número de página — "11–20 de 49" y no solo
+ * "página 2 de 5" — porque el usuario está llevando una cuenta mental de
+ * cuánto le falta revisar, y un número de página no responde esa pregunta.
+ * Los contadores de progreso siguen siendo globales: se pagina la lista,
+ * nunca el avance.
  */
-export function DependencyPagination({ pageNumber, pageCount, onPageChange }: DependencyPaginationProps) {
-  const isFirstPage = pageNumber <= 1
-  const isLastPage = pageNumber >= pageCount
-
-  function handlePrevious() {
-    if (isFirstPage) {
-      return
-    }
-    onPageChange(pageNumber - 1)
-  }
-
-  function handleNext() {
-    if (isLastPage) {
-      return
-    }
-    onPageChange(pageNumber + 1)
-  }
-
+export function DependencyPagination({
+  pageNumber,
+  pageCount,
+  firstItemNumber,
+  lastItemNumber,
+  totalItems,
+  onPageChange,
+}: DependencyPaginationProps) {
   return (
-    <nav aria-label="Páginas de la tabla de dependencias" className="flex items-center justify-between gap-3">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        aria-disabled={isFirstPage}
-        onClick={handlePrevious}
-        className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
-      >
-        <ChevronLeftIcon aria-hidden="true" focusable="false" />
-        Anterior
-      </Button>
+    <nav
+      aria-label="Páginas de reglas detectadas"
+      className="flex flex-wrap items-center justify-between gap-2"
+    >
+      {/*
+        El rango cambia lejos del foco al pasar de página, y el botón que se
+        pulsó sigue montado, así que nada lo anunciaría por sí solo.
+      */}
+      <p aria-live="polite" className="text-xs text-muted-foreground">
+        Mostrando {firstItemNumber}&ndash;{lastItemNumber} de {totalItems} reglas &middot; página{" "}
+        {pageNumber} de {pageCount}
+      </p>
 
-      <div aria-live="polite" className="min-h-5">
-        <p id={PAGE_STATUS_ID} className="text-sm text-muted-foreground">
-          Página {pageNumber} de {pageCount}
-        </p>
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={pageNumber <= 1}
+          onClick={() => onPageChange(pageNumber - 1)}
+        >
+          &larr; Anteriores
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={pageNumber >= pageCount}
+          onClick={() => onPageChange(pageNumber + 1)}
+        >
+          Siguientes &rarr;
+        </Button>
       </div>
-
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        aria-disabled={isLastPage}
-        onClick={handleNext}
-        className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
-      >
-        Siguiente
-        <ChevronRightIcon aria-hidden="true" focusable="false" />
-      </Button>
     </nav>
   )
 }
