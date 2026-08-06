@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { detectFunctionalDependencies } from "@/features/fd-detection"
-import { normalizeTo3NF, generateDdl } from "@/features/normalization"
+import { generateDdl, normalizeByStage, normalizeTo3NF } from "@/features/normalization"
+import { diffStages } from "@/features/sql-upload/stageDiff"
 import { suggestPrimaryKey } from "@/features/sql-upload/suggestPrimaryKey"
 import type { ColumnName } from "@/domain"
 import { columnNamesOf } from "@/domain"
@@ -54,6 +55,26 @@ describe("the flow a user actually walks", () => {
 
     expect(schema.tables.length).toBe(6)
 
+    // El recorrido por etapas que muestra la pantalla: 1FN es la tabla
+    // original entera, y cada etapa siguiente parte algo más. Si dos etapas
+    // consecutivas dieran lo mismo en este dataset, la pantalla estaría
+    // cobrando tres pestañas por una sola idea.
+    const [firstNormalForm, secondNormalForm, thirdNormalForm] = normalizeByStage({
+      table: ventasRawFixture,
+      confirmedDependencies: confirmed,
+      primaryKey: suggestion.columns,
+    })
+    expect(firstNormalForm.tables).toHaveLength(1)
+    expect(secondNormalForm.tables.length).toBeGreaterThan(firstNormalForm.tables.length)
+    expect(thirdNormalForm.tables.length).toBeGreaterThan(secondNormalForm.tables.length)
+    expect(thirdNormalForm.tables).toEqual(schema.tables)
+
+    // Cada etapa tiene que mover algo cuando hay reglas de sobra: si dos
+    // etapas consecutivas dieran lo mismo con el answer key completo, la
+    // pantalla estaría cobrando tres pasos por una sola idea.
+    expect(diffStages(firstNormalForm, secondNormalForm).movedColumns.length).toBeGreaterThan(0)
+    expect(diffStages(secondNormalForm, thirdNormalForm).movedColumns.length).toBeGreaterThan(0)
+
     const ddl = generateDdl(schema)
     expect(ddl).toContain("CREATE TABLE")
 
@@ -78,5 +99,37 @@ describe("the flow a user actually walks", () => {
       expect(ddl).toContain(referencing)
       expect(ddl.indexOf(referenced)).toBeLessThan(ddl.indexOf(referencing))
     }
+  })
+
+  it("leaves a stage empty, legitimately, when only one transitive rule is confirmed", () => {
+    // El escenario que confundió al usuario: confirmó UNA regla de decenas y
+    // no notaba diferencia entre 2FN y 3FN. Es correcto — una regla
+    // transitiva se mueve en 3FN, así que 2FN no tiene nada que hacer. Lo que
+    // faltaba no era arreglar el motor sino que la pantalla lo dijera, y esto
+    // fija que el caso "no cambió nada" es real y detectable.
+    const suggestion = suggestPrimaryKey(detection.dependencies, columnNamesOf(ventasRawFixture))
+    expect(suggestion.kind).toBe("suggested")
+    if (suggestion.kind !== "suggested") return
+
+    const keyColumns = new Set(suggestion.columns)
+    const transitiveOnly = detection.dependencies.find(
+      (dependency) =>
+        !dependency.evidence.isTrivial &&
+        dependency.determinant.length === 1 &&
+        dependency.determinant.every((column) => !keyColumns.has(column)),
+    )
+    expect(transitiveOnly).toBeDefined()
+    if (transitiveOnly === undefined) return
+
+    const [first, second, third] = normalizeByStage({
+      table: ventasRawFixture,
+      confirmedDependencies: [transitiveOnly],
+      primaryKey: suggestion.columns,
+    })
+
+    // 2FN no toca nada: la única regla confirmada no depende de una parte de
+    // la clave. 3FN sí la mueve.
+    expect(diffStages(first, second)).toEqual({ newTables: [], movedColumns: [] })
+    expect(diffStages(second, third).movedColumns.length).toBeGreaterThan(0)
   })
 })
