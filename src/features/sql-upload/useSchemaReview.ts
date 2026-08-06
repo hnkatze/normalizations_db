@@ -2,8 +2,12 @@
 
 import { useState } from "react"
 
-import type { ColumnName, FunctionalDependency, ReviewedDependency } from "@/domain"
-import { buildInitialReview, toggleConfirmed } from "./reviewedDependencies"
+import type { ColumnName, FdDecision, FunctionalDependency, ReviewedDependency } from "@/domain"
+import {
+  buildInitialReview,
+  setDependenciesDecision,
+  toggleConfirmed,
+} from "./reviewedDependencies"
 
 type SchemaReview = {
   readonly primaryKey: readonly ColumnName[]
@@ -13,6 +17,11 @@ type SchemaReview = {
   readonly toggleKeyColumn: (column: ColumnName) => void
   readonly applySuggestedPrimaryKey: (columns: readonly ColumnName[]) => void
   readonly toggleConfirmedDependency: (dependency: FunctionalDependency) => void
+  /** Lleva todas las dependencias de un determinante al mismo estado de una sola vez. */
+  readonly setGroupDecision: (
+    dependencies: readonly FunctionalDependency[],
+    decision: FdDecision,
+  ) => void
   readonly startReview: (dependencies: readonly FunctionalDependency[]) => void
 }
 
@@ -49,6 +58,13 @@ export function useSchemaReview(): SchemaReview {
     setReviewed((current) => toggleConfirmed(current, dependency))
   }
 
+  function setGroupDecision(
+    dependencies: readonly FunctionalDependency[],
+    decision: FdDecision,
+  ) {
+    setReviewed((current) => setDependenciesDecision(current, dependencies, decision))
+  }
+
   function startReview(dependencies: readonly FunctionalDependency[]) {
     setPrimaryKey([])
     setReviewed(buildInitialReview(dependencies))
@@ -61,6 +77,7 @@ export function useSchemaReview(): SchemaReview {
     toggleKeyColumn,
     applySuggestedPrimaryKey,
     toggleConfirmedDependency,
+    setGroupDecision,
     startReview,
   }
 }

@@ -6,6 +6,7 @@ import {
   buildInitialReview,
   confirmedDependenciesOf,
   dependencyKey,
+  setDependenciesDecision,
   toggleConfirmed,
 } from "./reviewedDependencies"
 
@@ -80,6 +81,43 @@ describe("toggleConfirmed", () => {
     const toggledAgain = toggleConfirmed(confirmedOnce, a)
 
     expect(toggledAgain).toEqual([{ dependency: a, decision: "pending" }])
+  })
+})
+
+describe("setDependenciesDecision", () => {
+  it("applies one decision to a whole group and leaves the rest untouched", () => {
+    const nombre = fd(["cliente_id"], "nombre")
+    const email = fd(["cliente_id"], "email")
+    const unrelated = fd(["producto_id"], "precio")
+    const reviewed = buildInitialReview([nombre, email, unrelated])
+
+    const next = setDependenciesDecision(reviewed, [nombre, email], "confirmed")
+
+    expect(next).toEqual([
+      { dependency: nombre, decision: "confirmed" },
+      { dependency: email, decision: "confirmed" },
+      { dependency: unrelated, decision: "pending" },
+    ])
+  })
+
+  it("reverts a whole group back to pending", () => {
+    const nombre = fd(["cliente_id"], "nombre")
+    const email = fd(["cliente_id"], "email")
+    const group = [nombre, email]
+    const confirmed = setDependenciesDecision(buildInitialReview(group), group, "confirmed")
+
+    const next = setDependenciesDecision(confirmed, group, "pending")
+
+    expect(confirmedDependenciesOf(next)).toEqual([])
+  })
+
+  it("ignores a target that is not part of the review", () => {
+    const known = fd(["a"], "b")
+    const reviewed = buildInitialReview([known])
+
+    const next = setDependenciesDecision(reviewed, [fd(["x"], "y")], "confirmed")
+
+    expect(next).toEqual(reviewed)
   })
 })
 

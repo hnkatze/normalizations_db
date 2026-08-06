@@ -2,54 +2,73 @@ import { describe, expect, it } from "vitest"
 
 import { paginate } from "./paginate"
 
+const items = ["a", "b", "c", "d", "e", "f", "g"]
+
 describe("paginate", () => {
-  it("returns the requested slice of items", () => {
-    const items = Array.from({ length: 25 }, (_, index) => index)
+  it("returns one empty page for an empty list", () => {
+    // Cero páginas obligaría a cada consumidor a distinguir "sin datos" de
+    // "página fuera de rango". Una lista vacía es una página vacía.
+    const page = paginate([], 3, 1)
 
-    const page = paginate(items, 10, 2)
-
-    expect(page).toEqual({ items: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19], pageNumber: 2, pageCount: 3 })
+    expect(page.items).toEqual([])
+    expect(page.pageCount).toBe(1)
+    expect(page.pageNumber).toBe(1)
+    expect(page.firstItemNumber).toBe(0)
+    expect(page.lastItemNumber).toBe(0)
   })
 
-  it("returns a partial last page", () => {
-    const items = Array.from({ length: 25 }, (_, index) => index)
+  it("cuts the first page and reports its bounds", () => {
+    const page = paginate(items, 3, 1)
 
-    const page = paginate(items, 10, 3)
-
-    expect(page).toEqual({ items: [20, 21, 22, 23, 24], pageNumber: 3, pageCount: 3 })
+    expect(page.items).toEqual(["a", "b", "c"])
+    expect(page.pageCount).toBe(3)
+    expect(page.firstItemNumber).toBe(1)
+    expect(page.lastItemNumber).toBe(3)
+    expect(page.totalItems).toBe(7)
   })
 
-  it("clamps a page number above the last page down to the last page", () => {
-    const items = Array.from({ length: 5 }, (_, index) => index)
+  it("cuts a partial last page", () => {
+    const page = paginate(items, 3, 3)
 
-    const page = paginate(items, 10, 99)
-
-    expect(page).toEqual({ items: [0, 1, 2, 3, 4], pageNumber: 1, pageCount: 1 })
+    expect(page.items).toEqual(["g"])
+    expect(page.firstItemNumber).toBe(7)
+    expect(page.lastItemNumber).toBe(7)
   })
 
-  it("clamps a page number below 1 up to 1", () => {
-    const items = [1, 2, 3]
+  it("clamps a page number past the end to the last real page", () => {
+    // El caso que motiva el ajuste: la lista se acorta mientras el usuario
+    // confirma reglas, y quien estaba al final se quedaría sin nada que ver.
+    const page = paginate(items, 3, 99)
 
-    const page = paginate(items, 10, 0)
-
-    expect(page).toEqual({ items: [1, 2, 3], pageNumber: 1, pageCount: 1 })
+    expect(page.pageNumber).toBe(3)
+    expect(page.items).toEqual(["g"])
   })
 
-  it("reports one empty page for an empty list, never a zero page count", () => {
-    const page = paginate<number>([], 10, 1)
+  it("clamps a page number below one", () => {
+    const page = paginate(items, 3, 0)
 
-    expect(page).toEqual({ items: [], pageNumber: 1, pageCount: 1 })
+    expect(page.pageNumber).toBe(1)
+    expect(page.items).toEqual(["a", "b", "c"])
   })
 
-  it("clamps a pageSize of 0 up to 1 instead of producing an infinite page count", () => {
-    const page = paginate([1, 2, 3], 0, 1)
+  it("puts everything on one page when the size covers the whole list", () => {
+    const page = paginate(items, 50, 1)
 
-    expect(page).toEqual({ items: [1], pageNumber: 1, pageCount: 3 })
+    expect(page.pageCount).toBe(1)
+    expect(page.items).toEqual(items)
   })
 
-  it("clamps a negative pageSize up to 1 instead of slicing with a negative end index", () => {
-    const page = paginate([1, 2, 3], -5, 2)
+  it("rejects a page size that cannot produce pages", () => {
+    // Un tamaño de cero produciría una división por cero y un pageCount
+    // infinito; fallar acá es preferible a renderizar para siempre.
+    expect(() => paginate(items, 0, 1)).toThrow()
+    expect(() => paginate(items, -3, 1)).toThrow()
+  })
 
-    expect(page).toEqual({ items: [2], pageNumber: 2, pageCount: 3 })
+  it("does not mutate the input list", () => {
+    const original = [...items]
+    paginate(items, 2, 2)
+
+    expect(items).toEqual(original)
   })
 })

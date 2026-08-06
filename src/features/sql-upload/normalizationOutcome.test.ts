@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import type { ColumnDefinition, FlatTable, NormalizationInput } from "@/domain"
 
-import { computeNormalizationOutcome } from "./normalizationOutcome"
+import { computeNormalizationOutcome, finalStageOf } from "./normalizationOutcome"
 
 function textColumn(name: string): ColumnDefinition {
   return { name, sqlType: "text", nullable: false }
@@ -55,8 +55,37 @@ describe("computeNormalizationOutcome", () => {
 
     expect(outcome.kind).toBe("ready")
     if (outcome.kind !== "ready") return
-    expect(outcome.schema.tables).toHaveLength(2)
-    expect(outcome.ddl).toContain("CREATE TABLE")
+    expect(finalStageOf(outcome.stages).schema.tables).toHaveLength(2)
+    expect(finalStageOf(outcome.stages).ddl).toContain("CREATE TABLE")
+  })
+
+  it("exposes the three stages in order, each with its own DDL", () => {
+    const outcome = computeNormalizationOutcome(
+      baseInput({
+        confirmedDependencies: [
+          {
+            determinant: ["department_id"],
+            dependent: "department_name",
+            evidence: { groupCount: 1, rowCount: 1, maxGroupSize: 1, isTrivial: false },
+          },
+        ],
+      }),
+    )
+
+    expect(outcome.kind).toBe("ready")
+    if (outcome.kind !== "ready") return
+
+    expect(outcome.stages.map((stage) => stage.schema.normalForm)).toEqual([
+      "1NF",
+      "2NF",
+      "3NF",
+    ])
+    // 1FN es la tabla original entera: es el "antes" contra el que se lee
+    // todo lo demás, no un esquema ya descompuesto.
+    expect(outcome.stages[0].schema.tables).toHaveLength(1)
+    for (const stage of outcome.stages) {
+      expect(stage.ddl).toContain("CREATE TABLE")
+    }
   })
 
   it("catches an invariant violation and reports it as an error outcome instead of throwing", () => {

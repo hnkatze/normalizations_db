@@ -46,6 +46,29 @@ export function toggleConfirmed(
   })
 }
 
+/**
+ * Aplica una misma decisión a varias dependencias de una sola vez; deja el
+ * resto sin modificar.
+ *
+ * Existe para la casilla de grupo de la pantalla de revisión. "`cliente_id`
+ * determina estos cuatro campos" es UNA regla de negocio, y resolverla con
+ * cuatro llamadas sucesivas a `toggleConfirmed` produciría cuatro
+ * renderizados y, peor, invertiría cada casilla por separado en lugar de
+ * llevarlas todas al mismo estado.
+ */
+export function setDependenciesDecision(
+  reviewed: readonly ReviewedDependency[],
+  targets: readonly FunctionalDependency[],
+  decision: FdDecision,
+): readonly ReviewedDependency[] {
+  const targetKeys = new Set(targets.map(dependencyKey))
+  return reviewed.map((entry) =>
+    targetKeys.has(dependencyKey(entry.dependency))
+      ? { dependency: entry.dependency, decision }
+      : entry,
+  )
+}
+
 /** Las dependencias que el usuario ha confirmado, en el orden en que fueron detectadas. */
 export function confirmedDependenciesOf(
   reviewed: readonly ReviewedDependency[],
