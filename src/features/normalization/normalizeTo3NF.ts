@@ -44,6 +44,7 @@ import type {
   Displacement,
   ForeignKey,
   FunctionalDependency,
+  NormalForm,
   NormalizationInput,
   NormalizedSchema,
   NormalizedTable,
@@ -161,7 +162,16 @@ function findReciprocalPairs(
   return pairs
 }
 
-export function normalizeTo3NF(input: NormalizationInput): NormalizedSchema {
+/**
+ * Las tres etapas de la descomposición, en orden: 1FN, 2FN, 3FN.
+ *
+ * Una tupla de largo fijo y no un arreglo: siempre son exactamente tres, y
+ * decirlo en el tipo le ahorra al consumidor tener que manejar un índice que
+ * podría no existir.
+ */
+export type NormalizationStages = readonly [NormalizedSchema, NormalizedSchema, NormalizedSchema]
+
+function runNormalizationStages(input: NormalizationInput): NormalizationStages {
   const { table, confirmedDependencies, primaryKey } = input
   const allColumns = columnNamesOf(table)
   const primaryKeySet = new Set(primaryKey)
@@ -287,6 +297,58 @@ export function normalizeTo3NF(input: NormalizationInput): NormalizedSchema {
     return true
   }
 
+  /**
+   * Congela el estado actual de las tablas en construcción como un esquema.
+   *
+   * Se llama tres veces, una por etapa. No hace falta copiar los conjuntos
+   * mutables: cada llamada materializa arreglos nuevos e inmutables en el
+   * acto, así que una foto nunca queda mirando el estado que cambió después.
+   */
+  function materialize(normalForm: NormalForm): NormalizedSchema {
+    const workingTables = [...tablesByName.values()]
+
+    function buildForeignKeys(current: WorkingTable): readonly ForeignKey[] {
+      const ownColumns = new Set<ColumnName>([...current.primaryKey, ...current.attributes])
+      const foreignKeys: ForeignKey[] = []
+
+      for (const other of workingTables) {
+        if (other.name === current.name) {
+          continue
+        }
+        const isReferenced = other.primaryKey.every((column) => ownColumns.has(column))
+        if (!isReferenced) {
+          continue
+        }
+        foreignKeys.push({
+          columns: other.primaryKey,
+          referencesTable: other.name,
+          referencesColumns: other.primaryKey,
+        })
+      }
+
+      return foreignKeys
+    }
+
+    const tables: NormalizedTable[] = workingTables.map((workingTable) => {
+      const columnNames = orderColumns([...workingTable.primaryKey, ...workingTable.attributes])
+      return {
+        name: workingTable.name,
+        columns: columnNames.map(columnDefinitionOf),
+        primaryKey: workingTable.primaryKey,
+        foreignKeys: buildForeignKeys(workingTable),
+        sourceColumns: columnNames,
+      }
+    })
+
+    assertNoForeignKeyCycles(tables)
+
+    return { normalForm, tables }
+  }
+
+  // 1FN: el punto de partida. Una sola tabla, con la clave que eligió el
+  // usuario declarada y toda la redundancia todavía adentro.
+  const firstNormalForm = materialize("1NF")
+
   // 2NF: las dependencias parciales solo existen cuando la clave es compuesta.
   if (primaryKey.length > 1) {
     for (const dependency of confirmedDependencies) {
@@ -305,6 +367,11 @@ export function normalizeTo3NF(input: NormalizationInput): NormalizedSchema {
       }
     }
   }
+
+  // La foto de 2FN se toma acá, entre las dos pasadas: ya no quedan
+  // dependencias parciales, pero las transitivas siguen intactas. Esa
+  // diferencia es exactamente lo que la pantalla necesita mostrar.
+  const secondNormalForm = materialize("2NF")
 
   // 3NF: bucle de punto fijo, protegido contra una entrada no terminante (cíclica).
   const maxRounds = confirmedDependencies.length + 1
@@ -339,44 +406,29 @@ export function normalizeTo3NF(input: NormalizationInput): NormalizedSchema {
     )
   }
 
-  const workingTables = [...tablesByName.values()]
+  return [firstNormalForm, secondNormalForm, materialize("3NF")]
+}
 
-  function buildForeignKeys(current: WorkingTable): readonly ForeignKey[] {
-    const ownColumns = new Set<ColumnName>([...current.primaryKey, ...current.attributes])
-    const foreignKeys: ForeignKey[] = []
+/**
+ * Las tres etapas de la descomposición, para que la interfaz pueda mostrar el
+ * CAMINO y no solo el destino.
+ *
+ * Ver a qué se parece 1FN es lo que le da sentido a 2FN, y ver 2FN es lo que
+ * le da sentido a 3FN. Entregar únicamente el resultado final obliga al
+ * usuario a creer en el motor en lugar de entenderlo, que es justo lo
+ * contrario de lo que esta herramienta existe para hacer.
+ */
+export function normalizeByStage(input: NormalizationInput): NormalizationStages {
+  return runNormalizationStages(input)
+}
 
-    for (const other of workingTables) {
-      if (other.name === current.name) {
-        continue
-      }
-      const isReferenced = other.primaryKey.every((column) => ownColumns.has(column))
-      if (!isReferenced) {
-        continue
-      }
-      foreignKeys.push({
-        columns: other.primaryKey,
-        referencesTable: other.name,
-        referencesColumns: other.primaryKey,
-      })
-    }
-
-    return foreignKeys
-  }
-
-  const tables: NormalizedTable[] = workingTables.map((workingTable) => {
-    const columnNames = orderColumns([...workingTable.primaryKey, ...workingTable.attributes])
-    return {
-      name: workingTable.name,
-      columns: columnNames.map(columnDefinitionOf),
-      primaryKey: workingTable.primaryKey,
-      foreignKeys: buildForeignKeys(workingTable),
-      sourceColumns: columnNames,
-    }
-  })
-
-  assertNoForeignKeyCycles(tables)
-
-  return { normalForm: "3NF", tables }
+/**
+ * El esquema final. Es la última etapa de `normalizeByStage`, nunca un
+ * segundo algoritmo: dos motores de normalización que se pretendan
+ * equivalentes divergen en cuanto uno de los dos cambia.
+ */
+export function normalizeTo3NF(input: NormalizationInput): NormalizedSchema {
+  return runNormalizationStages(input)[2]
 }
 
 /**

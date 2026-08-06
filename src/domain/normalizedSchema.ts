@@ -31,10 +31,20 @@ export type NormalizedTable = {
   readonly sourceColumns: readonly ColumnName[]
 }
 
-/** El resultado de la descomposición. */
+/**
+ * Las formas normales que este proyecto materializa.
+ *
+ * El alcance sigue topado en 3FN por decisión explícita (BCNF/4FN/5FN quedan
+ * fuera). Lo que la unión agrega no es alcance sino ETAPAS: la descomposición
+ * pasa por 1FN y 2FN camino a 3FN, y esos estados intermedios son esquemas
+ * legítimos que la interfaz muestra para que el usuario vea POR QUÉ se parte
+ * cada tabla en vez de recibir el resultado final como un hecho consumado.
+ */
+export type NormalForm = "1NF" | "2NF" | "3NF"
+
+/** El resultado de la descomposición, en una etapa concreta. */
 export type NormalizedSchema = {
-  /** El alcance está limitado a 3FN por una decisión explícita del proyecto. */
-  readonly normalForm: "3NF"
+  readonly normalForm: NormalForm
   readonly tables: readonly NormalizedTable[]
 }
 

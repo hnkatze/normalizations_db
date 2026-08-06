@@ -27,6 +27,7 @@ export { isVacuous } from "./functionalDependency"
 export type {
   Displacement,
   ForeignKey,
+  NormalForm,
   NormalizationInput,
   NormalizedSchema,
   NormalizedTable,
