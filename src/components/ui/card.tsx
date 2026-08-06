@@ -33,9 +33,20 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
+/**
+ * `as` existe para que el título de una tarjeta pueda ser un encabezado real.
+ * Por defecto es un `div`: un encabezado que no corresponde al esquema de la
+ * página es peor que ninguno. Cuando la tarjeta SÍ es una sección del
+ * documento, quien la usa pasa el nivel correcto y aparece en la navegación
+ * por encabezados del lector de pantalla.
+ */
+function CardTitle({
+  className,
+  as: Component = "div",
+  ...props
+}: React.ComponentProps<"div"> & { readonly as?: "div" | "h2" | "h3" | "h4" }) {
   return (
-    <div
+    <Component
       data-slot="card-title"
       className={cn(
         "font-heading text-base leading-snug font-medium group-data-[size=sm]/card:text-sm",
@@ -45,6 +56,7 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
     />
   )
 }
+
 
 function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
   return (
