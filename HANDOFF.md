@@ -1,15 +1,16 @@
 # Handoff — estado del trabajo en curso
 
 Documento para retomar el trabajo en otra máquina o después de una pausa larga.
-Refleja el estado al **11 de agosto de 2026**.
+Refleja el estado al **12 de agosto de 2026**.
 
-Rama de trabajo: `feature/normalization-workspace` (empujada, `84adc25..a204bd2`).
+Rama de trabajo: `feature/normalization-workspace`. Va **16 commits adelante de
+`development` y sin divergencia**, así que entra con fast-forward.
 
 ---
 
 ## Arrancar el entorno (leer esto primero)
 
-**El proyecto ahora necesita DOS procesos en desarrollo, no uno.**
+**El proyecto necesita DOS procesos en desarrollo, no uno.**
 
 ```bash
 pip install -r requirements.txt   # una sola vez: instala sqlglot
@@ -17,7 +18,7 @@ npm run dev:parser                # terminal 1 — servicio de lectura en :8787
 npm run dev                       # terminal 2 — Next.js en :3000
 ```
 
-Después: <http://localhost:3000/esquema> y subir un `.sql`.
+Después: <http://localhost:3000> y subir un `.sql`.
 
 `next dev` **no ejecuta funciones de Python**. En producción las corre Vercel desde
 `api/parse.py`, pero en local no las levanta nadie y `/api/parse` daría 404.
@@ -34,38 +35,67 @@ se busque el error en el código de la aplicación, donde no está.
 
 ## Qué se construyó en esta tanda
 
-El problema: la aplicación **ejecutaba** el `.sql` subido contra un esquema de staging en
-PostgreSQL y leía `information_schema`. Eso ataba la entrada al dialecto de Postgres, así
-que ningún volcado de SQL Server, MySQL u Oracle podía leerse. Y `discoverCreatedTable`
-además rechazaba por diseño los archivos con más de una tabla (`ambiguous-table`).
+**El paso de carga real dejó de usar `/api/analyze` y ahora consume `/api/parse`.**
+Con eso, el andamiaje de `/esquema` cumplió su función y se borró.
 
-La solución: **parsear el archivo en vez de ejecutarlo**.
+El hallazgo que ordenó todo el diseño: `detectFunctionalDependencies`, `normalizeTo3NF`
+y `generateDdl` importan **solo `@/domain`**. Cero dependencias de servidor. El motor
+nunca necesitó una base de datos, así que el análisis **bajó al navegador**:
 
 ```
-bytes → codificación (BOM) → dialecto (puntaje) → quitar ruido → trocear sentencias
-      → sqlglot → IR canónico → dominio TypeScript (detección de DF + 3FN, intacto)
+servidor (Python)          cliente (TypeScript, ya existía y es puro)
+─────────────────          ─────────────────────────────────────────
+archivo → ParsedDatabase   toFlatTable → detectar DF → 2FN/3FN → DDL
 ```
+
+`/api/analyze` hacía DOS trabajos: leer el archivo ejecutándolo en PostgreSQL **y**
+detectar las dependencias. Ahora el servidor solo lee.
+
+### El recorrido cambió
+
+```
+upload → schema → 1FN → 2FN → 3FN
+```
+
+`schema` es nuevo. Existe porque un archivo declara N tablas y **3FN está definida
+sobre UNA relación**. `StepAvailability` pasó de `{ hasAnalysis, isSchemaReady }` a
+`{ hasParsedFile, hasSelectedTable, isSchemaReady }`.
+
+> **No unir las tablas en una relación universal.** Un join fabrica tuplas espurias y
+> dependencias funcionales falsas que no existen en el dominio. Son N análisis
+> independientes más un grafo de claves foráneas para el informe global.
+
+### Decisiones que conviene no deshacer sin leer esto
+
+**Dos nombres de tabla, no uno.** `previewTableName` es la que se está mirando;
+`analyzedTableName` es la comprometida al análisis. Fusionarlos analizaría cada tabla
+que el usuario abre solo para verla, y le sacaría la posibilidad de comparar antes de
+decidir. Comprometerla es un botón aparte.
+
+**El análisis se deriva, no se guarda.** `useMemo` sobre `[analyzedTable]`. El memo no
+es especulativo: el contenedor vuelve a renderizar en cada casilla marcada durante la
+revisión y la detección es combinatoria sobre filas por columnas. Se acepta a propósito
+una doble ejecución al elegir tabla (el manejador la calcula para sembrar `startReview`,
+y el memo la recalcula en el renderizado siguiente): guardarla en estado crearía
+exactamente la copia desincronizable que el memo evita.
+
+**`parseFile` devuelve el estado que comprometió.** Quien llama necesita decidir el paso
+en el mismo evento, y leer `parse.state` justo después daría el valor del renderizado en
+curso. Reaccionar con un efecto sería sincronizar dos fuentes en vez de responder a un
+evento.
+
+**El archivo sin tablas se rechaza en el validador, no en la pantalla.** `parseSchemaResponse`
+devuelve `NO_TABLES_MESSAGE`. Antes caía en el mensaje genérico de cuerpo malformado, que
+mandaba a buscar una falla del servicio que no existía. Hay UNA sola redacción del
+problema; no volver a duplicarla en `describeParseStatus`.
 
 | Ruta | Qué es |
 |---|---|
-| `api/parse.py` | Función de Vercel. Cuerpo crudo, tope de 90 MB, errores en JSON. |
-| `api/_sqlparse/reader.py` | Codificación por BOM. Nunca lanza. |
-| `api/_sqlparse/dialect.py` | Puntaje por marcas propietarias. Cae en `postgres`. |
-| `api/_sqlparse/statements.py` | Saneador de ruido de SSMS + troceador que respeta literales. |
-| `api/_sqlparse/types.py` | Tipo canónico de sqlglot → `data_type` de `information_schema`. |
-| `api/_sqlparse/ir.py` | Constructor del IR. |
-| `src/domain/parsedSchema.ts` | `ParsedTable` / `ParsedDatabase` + `toFlatTable`. |
-| `src/features/sql-upload/parseContract.ts` | Contrato de `POST /api/parse`. |
-| `src/features/sql-upload/parseSchemaResponse.ts` | Validación en tiempo de ejecución (10 pruebas). |
-| `src/features/sql-upload/describeParsedTable.ts` | Lógica pura (11 pruebas). |
-| `src/features/sql-upload/useParseSql.ts` | La subida. |
-| `src/features/sql-upload/SqlFileField.tsx` | El input. |
-| `src/features/sql-upload/ParsedSchemaOverview.tsx` | Panel + selector de tabla. |
-| `src/features/sql-upload/ParsedTableDetail.tsx` | Columnas y muestra de datos. |
-
-Verificado contra un volcado real de Northwind hecho por SSMS (UTF-16 LE): detecta
-`tsql`, encuentra las 2 tablas con sus claves primarias, extrae **99 filas** y no deja
-ninguna sentencia sin interpretar. Un volcado sintético de `mysqldump` también se lee.
+| `src/features/sql-upload/analyzeParsedTable.ts` | `ParsedTable` → `{ table, detection }`. Puro, 4 pruebas. |
+| `src/features/sql-upload/describeParseStatus.ts` | Estado de lectura → aviso del hero. Puro, 6 pruebas. |
+| `src/features/sql-upload/workspaceSteps.ts` | El recorrido y qué abre cada paso. 22 pruebas. |
+| `src/features/sql-upload/SqlUploadContainer.tsx` | El contenedor. Único dueño del foco por paso. |
+| `src/features/sql-upload/ParsedSchemaOverview.tsx` | El paso `schema`: lista de tablas y previsualización. |
 
 ---
 
@@ -73,69 +103,39 @@ ninguna sentencia sin interpretar. Un volcado sintético de `mysqldump` también
 
 ### 1. Nadie confirmó que Vercel sirva `api/*.py` en un proyecto Next.js (SIN RESOLVER)
 
-Las rutas no chocan (`/api/parse` contra `/api/analyze`, que es de Next), y la
-documentación de Vercel describe funciones de Python en `api/`. Pero **no está probado en
-este proyecto**, y la documentación consultada no cubre el caso de mezclarlas con Next.js.
+Las rutas no chocan y la documentación de Vercel describe funciones de Python en `api/`.
+Pero **no está probado en este proyecto**, y la documentación consultada no cubre el caso
+de mezclarlas con Next.js.
 
-**Es la incógnita que bloquea producción.** La forma más barata de despejarla: llevar esta
-rama al flujo de `development` (ver abajo) y mirar el *preview deployment*. No hace falta
-instalar el CLI de Vercel.
+**Sigue siendo la incógnita que bloquea producción**, y ahora pesa más: la aplicación ya
+no tiene otro camino de lectura. La forma más barata de despejarla es integrar la rama a
+`development` y mirar el *preview deployment*.
 
-### 2. El paso de carga real todavía no usa `/api/parse`
+### 2. `/api/analyze` y `src/features/staging/` están muertos, pero siguen en pie
 
-`UploadHero` + `SqlUploadContainer` siguen yendo a `/api/analyze`, el camino viejo con
-PostgreSQL. Lo nuevo vive en `/esquema`, que es **andamiaje**: cuando el paso real consuma
-`/api/parse`, hay que borrar `src/app/esquema/page.tsx` y
-`src/seeds/northwindParsedFixture.ts`.
+Ninguna pantalla los llama. Se dejaron a propósito como red hasta que el preview confirme
+lo de Python. **Cuando eso pase, se borran juntos**: la ruta, `analyzeContract.ts`,
+`parseAnalyzeResponse.ts` y toda la carpeta `staging/` — con lo que se va también la
+dependencia de PostgreSQL y `DATABASE_URL`.
 
-Detalle suelto: `UploadHero.tsx` (~línea 362) todavía le dice al usuario que *"los esquemas
-con varias tablas todavía no son compatibles"*. Ya es falso.
+`StagingPort` era la abstracción equivocada para un parser, pero ya no hay que rediseñarla:
+no hay que reemplazarla por un puerto mejor, hay que eliminarla.
 
-### 3. `StagingPort` es la abstracción equivocada para un parser
+### 3. Nada de esto se probó en un navegador (SIN VERIFICAR)
 
-`StagingPort` modela una **base de datos** (`resetSchema` / `runScript` /
-`discoverCreatedTable` / `readRows`). Hacer que el servicio de Python lo implemente sería
-forzarlo. Corresponde un puerto por encima que devuelva `Result<readonly FlatTable[], …>`
-directamente; `pgStagingAdapter` + `loadFlatTable` pasan a ser **una** implementación y el
-parser otra.
+Lo verde son tipos, pruebas de funciones puras y build. **El recorrido de clics no se
+ejecutó nunca.** Falta confirmar a mano:
 
-### 4. Varias tablas de punta a punta
+- subir → elegir tabla → 1FN → 2FN → 3FN de punta a punta;
+- que el anillo de foco se vea al cambiar de paso, y su contraste;
+- que volver atrás y elegir OTRA tabla reinicie la revisión sin arrastrar la clave anterior.
 
-`FlatTable` es una sola relación y toda la interfaz está construida alrededor de eso.
+### 4. La vista de carga y el scroll (SIN VERIFICAR, previo)
 
-> **No unir las tablas en una relación universal.** Un join fabrica tuplas espurias y
-> dependencias funcionales falsas que no existen en el dominio. Lo correcto es N análisis
-> independientes —3FN está definida sobre UNA relación— más un grafo de claves foráneas
-> para el informe global.
+Se le quitaron unos 72px al liberar el encabezado, que es justo el sobrante que este
+documento describía antes. **No está confirmado que ahora entre sin scroll.**
 
-### 5. La vista de carga todavía tiene scroll (SIN RESOLVER, previo)
-
-El requisito es que el paso `upload` entre completo en el viewport. Se intentaron dos
-enfoques y ninguno lo cerró.
-
-Primer intento — aritmética a mano en `UploadHero.tsx`:
-
-```
-min-h-[calc(100dvh-7.5rem)] sm:min-h-[calc(100dvh-8.5rem)]
-```
-
-restando una altura de `AppHeader` *estimada*. Falló en navegador real, y es frágil por
-construcción.
-
-Segundo intento — cadena flex, que es el estado actual del código:
-
-| Archivo | Clases |
-|---|---|
-| `src/app/layout.tsx` — `<body>` | `min-h-dvh flex flex-col` |
-| `src/app/page.tsx` — `<main>` | `flex-1 flex flex-col min-h-0` |
-| `SqlUploadContainer.tsx` — div raíz y de contenido | `flex flex-1 flex-col min-h-0` |
-| `UploadHero.tsx` — wrapper | `flex-1 flex flex-col items-center justify-center` |
-
-El usuario reportó que **aún así sigue habiendo scroll**, y que el sobrante "es justo el
-tamaño del header". Último cambio aplicado y no verificado: se quitó `h-full` del `<html>`
-en `layout.tsx`.
-
-**El próximo paso es medir, no seguir estimando.** Con la app corriendo, en la consola:
+Si todavía sobra, el próximo paso es medir, no estimar. Con la app corriendo, en consola:
 
 ```js
 const d = document.documentElement;
@@ -151,29 +151,70 @@ console.log('sobrante:', d.scrollHeight - d.clientHeight, 'px');
 > `h-full` + `overflow-hidden` y daba scroll propio a cada panel. Se revirtió porque
 > escondía contenido sin mostrar barra que delatara que había más. **No volver a eso.**
 
+### 5. Varias tablas de punta a punta (parcial)
+
+Ya se puede elegir **cuál** tabla se normaliza, y volver a elegir otra. Lo que falta es
+el nivel de esquema: el grafo de claves foráneas —`ParsedTable.foreignKeys` ya las trae,
+nadie las usa todavía— y un informe global. Se dejó fuera del MVP a propósito.
+
 ### 6. Decisión abierta: ¿el stepper se elimina de toda la app? (previo)
 
-Hoy `WorkspaceStepper` está oculto solo en el paso `upload` y sigue funcionando en
-1FN/2FN/3FN. El usuario dijo "eso lo vamos a quitar" sin aclarar el alcance. Si se elimina
-del todo hay que rediseñar cómo se recorre el flujo: están implicados
-`WorkspaceStepper.tsx`, `workspaceSteps.ts` con `resolveStep`/`stepAfter`/`stepBefore` y
-sus pruebas.
+Sigue oculto solo en `upload` y ahora muestra **cinco** pasos. El usuario dijo "eso lo
+vamos a quitar" sin aclarar el alcance. Implicados: `WorkspaceStepper.tsx`,
+`workspaceSteps.ts` y sus pruebas.
 
-### 7. Auditoría de accesibilidad pendiente (previo)
+### 7. Accesibilidad: hecho lo del recorrido, pendiente lo que necesita navegador
 
-Pospuesta hasta terminar de pulir la interfaz. Puntos a juzgar:
+Cerrado en esta tanda:
 
-- La invariante de **exactamente un h1** en todos los pasos.
-- El h2 de paso lleva `sr-only` en `upload` pero **sigue siendo destino de un `focus()` +
-  `scrollIntoView()` programático**. Un elemento invisible que recibe el foco necesita
-  veredicto explícito.
-- Foco visible del `<input type="file">`, que está dentro de un `<label>`.
-- Que `prefers-reduced-motion` cubra *todas* las animaciones.
-- Reflow y zoom 200% con la cadena de altura.
+- El foco ya no aterriza en el `h2` que va `sr-only` en `upload` — va al `h1` visible del
+  hero. `sr-only` recorta a 1x1px y **recorta también el anillo de foco**.
+- Las flechas `→`/`←` salieron del nombre accesible de los botones.
+- `main` y ambos encabezados declaran su propio anillo.
+- Quitar el encabezado no rompió nada: ningún criterio exige un landmark `banner`, y al
+  documento lo identifica su `<title>`.
+
+Pendiente, y **solo se puede juzgar en un navegador real**: que el anillo se pinte de
+verdad, su contraste 3:1, el área táctil de los cinco botones del stepper en pantalla
+angosta, y si `prefers-reduced-motion` cubre *todas* las animaciones.
+
+Hallazgo del auditor que **no se tomó**: pasar el efecto de foco del hero a
+`useLayoutEffect` para cerrar una ventana de un frame en que el foco está en `body`. El
+beneficio es de un frame y no es verificable sin lector de pantalla, mientras que
+`useLayoutEffect` en un componente cliente pre-renderizado emite el warning de SSR.
 
 ---
 
 ## Trampas conocidas del proyecto
+
+### De React
+
+**Una bandera `isFirstRender` NO sobrevive a StrictMode.** Next 16 lo activa por defecto.
+StrictMode invoca cada efecto **dos veces** en desarrollo sin desmontar de verdad, así que
+los refs **no se reinician** entre las dos pasadas: la primera consume la bandera y la
+segunda la encuentra ya en `false` y ejecuta el cuerpo igual.
+
+Para "reaccionar solo cuando X cambió", **comparar contra el valor anterior**, que es
+idempotente bajo el doble llamado:
+
+```ts
+const lastFocusedStep = useRef<WorkspaceStep>(step)
+useEffect(() => {
+  if (lastFocusedStep.current === step) return
+  lastFocusedStep.current = step
+  // ...
+}, [step])
+```
+
+**Un solo dueño del foco.** El contenedor lo mueve al cambiar de paso; `UploadHero` solo
+lo reclama cuando cambia el contador de Clear estando ya en `upload` (ahí el paso no
+cambia y el contenedor no dispara). Dos autoridades sobre el foco se rompen de forma
+intermitente, que es la peor forma de romperse.
+
+**Para un destino de foco programático y no interactivo, `:focus`, nunca `:focus-visible`.**
+`:focus-visible` existe para suprimir el anillo en elementos que el usuario clickea; un
+encabezado con `tabindex="-1"` no se puede clickear-para-enfocar, así que esa supresión no
+compra nada y deja el pintado a la heurística del navegador.
 
 ### Del parseo
 
@@ -197,9 +238,8 @@ del DDL: `"character varying"`, no `"VARCHAR(40)"`. Los fixtures de
 `src/seeds/ventasRawFixture.ts` afirman esas cadenas exactas.
 
 **Los binarios se resumen, no se transportan.** Una columna `image` pesa megabytes por fila
-y nunca determina otra columna; la detección de dependencias solo compara celdas por
-igualdad, así que un resumen (`0x<10746 bytes:37c1cbb14754>`) conserva todo lo que el
-análisis necesita.
+y nunca determina otra columna; la detección solo compara celdas por igualdad, así que un
+resumen (`0x<10746 bytes:37c1cbb14754>`) conserva todo lo que el análisis necesita.
 
 ### Del resto del proyecto
 
@@ -217,8 +257,16 @@ nivel window hay que tipar `globalThis.DragEvent`.
 pruebas de render implica dependencias nuevas y tocar la config: es una decisión pendiente,
 no algo para colar dentro de un bugfix.
 
-**El índice de CodeGraph se desactualiza.** Devolvió `SqlUploadCard.tsx`, que fue
-eliminado. Contrastar siempre sus resultados contra el sistema de archivos.
+**El índice de CodeGraph se desactualiza.** Contrastar siempre sus resultados contra el
+sistema de archivos.
+
+**Los flags interactivos de git no existen en el entorno de agentes.** `git add -p` y
+`git rebase -i` están bloqueados. Para verificar un commit aislado sirve
+`git add <rutas>` → `git stash push --keep-index --include-untracked` → correr las
+comprobaciones → `git commit` → `git stash pop`.
+
+**No encadenar `npx next build` con `| tail`.** Dispara el hook que bloquea la lectura de
+directorios vendorizados. Filtrar con `rg`, o correr el build en su propio comando.
 
 ---
 
@@ -226,9 +274,9 @@ eliminado. Contrastar siempre sus resultados contra el sistema de archivos.
 
 ```bash
 npx tsc --noEmit     # limpio
-npx vitest run       # 29 archivos, 198 pruebas
+npx vitest run       # 31 archivos, 218 pruebas
 npx eslint src       # limpio
-npx next build       # compila; emite la ruta /esquema
+npx next build       # compila
 ```
 
 **`npx eslint api` falla**: eslint no tiene configuración para `.py`. Lintear solo `src`.
@@ -240,14 +288,8 @@ significa "no se chequeó", no "está limpio".
 
 **No hay navegador headless garantizado en el entorno de agentes.** Que el HTML servido
 contenga las clases nuevas **no prueba nada** sobre el layout. Toda afirmación sobre
-scroll, animaciones o responsive que no venga de un navegador real es una estimación y debe
-declararse como tal.
-
-> Lo que sí se midió en navegador real para la pantalla nueva: el desbordamiento horizontal
-> del documento es **0 px** a 1280 px y a 375 px. La tabla ancha se desplaza dentro de su
-> propio contenedor (`[data-slot="table-container"]`), ocultando ~199 px. Por eso el
-> encabezado dice *"Datos (6 filas · 11 columnas)"*: en los sistemas que superponen la barra
-> de desplazamiento, el número es la única pista de que hay más.
+scroll, foco, animaciones o responsive que no venga de un navegador real es una estimación
+y debe declararse como tal.
 
 ---
 
@@ -264,7 +306,7 @@ commit de merge del PR #1. Hace falta un merge normal.
 
 > `feature/normalization-workspace` está **fuera** de ese flujo. Para que llegue a preview
 > —y de paso despejar la incógnita de Python en Vercel— hay que integrarla a
-> `development`.
+> `development`. Hoy entra con fast-forward.
 
 ---
 
