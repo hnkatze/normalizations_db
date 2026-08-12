@@ -230,6 +230,12 @@ def _to_cell_value(node: exp.Expression) -> Any:
     # las comillas terminarían dentro del valor.
     if isinstance(node, exp.National):
         return _to_cell_value(node.this) if isinstance(node.this, exp.Expression) else node.this
+    # Un volcado escribe las fechas tipadas como `CAST('2024-03-04' AS DATE)`.
+    # El valor que importa es el de adentro: sin desenvolverlo, la celda termina
+    # guardando la expresión SQL entera como texto. `TryCast` hereda de `Cast`,
+    # así que entra por el mismo camino.
+    if isinstance(node, exp.Cast):
+        return _to_cell_value(node.this)
     if isinstance(node, exp.Neg):
         inner = _to_cell_value(node.this)
         return -inner if isinstance(inner, (int, float)) else inner
