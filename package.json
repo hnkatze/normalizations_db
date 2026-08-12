@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:parser": "python scripts/dev_parse_server.py",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
