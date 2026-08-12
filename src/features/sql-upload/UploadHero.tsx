@@ -2,10 +2,8 @@ import type { ChangeEvent, DragEvent, RefObject } from "react"
 import { useEffect, useRef, useState } from "react"
 import { CircleCheck, InfoIcon, Upload, XIcon } from "lucide-react"
 
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 import { AnalyzeAction, ANALYSIS_STATUS_ID } from "./AnalyzeAction"
 import type { ParseState } from "./parseState"
@@ -33,6 +31,20 @@ type UploadHeroProps = {
 }
 
 const FILE_STATUS_ID = "sql-file-status"
+
+/**
+ * El recorrido, dicho antes de empezarlo.
+ *
+ * Está acá y no en `workspaceSteps.ts` porque son dos cosas distintas: aquello
+ * es la máquina que gobierna la navegación, esto es la promesa que se le hace
+ * al usuario en la portada. Mezclarlas ataría el texto de una pantalla a la
+ * lógica del recorrido.
+ */
+const UPLOAD_STEPS: readonly { readonly title: string; readonly detail: string }[] = [
+  { title: "Leer", detail: "Se interpreta el volcado sin ejecutarlo." },
+  { title: "Elegir", detail: "Vos decidís qué tabla se normaliza." },
+  { title: "Descomponer", detail: "1FN, 2FN y 3FN, paso por paso." },
+]
 
 /**
  * Animación de entrada compartida por los cuatro bloques del hero (título,
@@ -224,48 +236,78 @@ export function UploadHero({
 
   return (
     // Cero aritmética de alto: `flex-1` toma lo que sobra de la cadena flex
-    // que arranca en <body> (min-h-dvh) y atraviesa <main> y el contenedor
-    // del paso (ambos flex-1 + min-h-0). Cuando el contenido entra, el hero
-    // se estira exacto hasta llenar el viewport y queda centrado — sin
-    // calcular la altura del encabezado ni del padding de <main> a mano, que
-    // es justo lo que se rompía antes con un solo píxel de diferencia. Si el
-    // contenido no entra igual, no hay `overflow-hidden` en ningún eslabón,
-    // así que la página simplemente crece y aparece scroll normal.
-    //
-    // La variante `short:` (definida en globals.css, `@media (max-height:
-    // 900px)`) ya NO está para "arreglar" el alto — eso lo resuelve la
-    // cadena flex sola. Achica tipografía, paddings y la zona de drop para
-    // que en viewports bajos (celular apaisado, ventanas de escritorio poco
-    // altas, zoom al 200%) el contenido real ocupe menos, y así una porción
-    // más grande de esos casos entre sin necesitar el fallback de scroll.
-    <div className="flex flex-1 flex-col items-center justify-center px-4 py-10 short:py-4 sm:px-6 sm:py-14 short:sm:py-6">
-      <div className="flex w-full max-w-3xl flex-col items-center text-center">
-        <h1
-          ref={headingRef}
-          tabIndex={-1}
-          className={cn(
-            ENTRANCE_ANIMATION,
-            "focus:outline-2 focus:outline-offset-4 focus:outline-ring",
-            "text-balance font-heading text-3xl short:text-2xl font-semibold tracking-tight text-foreground sm:text-4xl short:sm:text-3xl lg:text-5xl short:lg:text-4xl"
-          )}
-        >
-          Normaliza tu semilla SQL
-        </h1>
-        <p
-          className={cn(
-            ENTRANCE_ANIMATION,
-            "delay-75 mt-2 short:mt-1 text-pretty text-base short:text-sm text-muted-foreground sm:mt-3 short:sm:mt-2 sm:text-lg short:sm:text-base"
-          )}
-        >
-          Sube una semilla SQL plana y sin normalizar; detectaremos las
-          dependencias funcionales, generaremos un esquema en 3FN y
-          prepararemos la migración por ti.
-        </p>
+    // que arranca en <body> (min-h-dvh) y atraviesa <main> y el contenedor del
+    // paso. Si el contenido no entra igual, no hay `overflow-hidden` en ningún
+    // eslabón, así que la página crece y aparece scroll normal.
+    <div className="flex flex-1 flex-col justify-center px-4 py-8 short:py-4 sm:px-6">
+      {/* Rejilla asimétrica: el argumento a la izquierda, la acción a la
+          derecha. Una sola columna centrada le da el mismo peso a todo y no
+          guía la vista hacia ningún lado — es la composición que hace que una
+          pantalla se lea como plantilla. */}
+      <div className="mx-auto grid w-full max-w-6xl items-center gap-10 short:gap-6 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
+        <div className="flex flex-col">
+          {/* El cintillo con la regla fina es lo que lee como documento
+              técnico y no como portada de producto. */}
+          <div className={cn(ENTRANCE_ANIMATION, "flex items-center gap-4")}>
+            <span className="shrink-0 font-mono text-xs uppercase tracking-[0.22em] text-muted-foreground">
+              0FN <span aria-hidden="true">&rarr;</span>
+              <span className="sr-only">a</span> 3FN
+            </span>
+            <span aria-hidden="true" className="h-px flex-1 bg-border" />
+          </div>
+
+          <h1
+            ref={headingRef}
+            tabIndex={-1}
+            className={cn(
+              ENTRANCE_ANIMATION,
+              "focus:outline-2 focus:outline-offset-4 focus:outline-ring",
+              // Un solo `clamp` en lugar de seis clases encadenando `short:`
+              // con `sm:` y `lg:`. Va en `vmin` y no en `vw` a propósito: así
+              // el título también achica en una ventana ancha pero baja, que
+              // es el caso que `short:` venía a cubrir a mano.
+              "mt-5 short:mt-3 text-balance font-heading text-[clamp(2.1rem,3.4vmin_+_1.15rem,3.9rem)] font-semibold leading-[1.05] tracking-tight text-foreground"
+            )}
+          >
+            Normaliza tu <span className="italic text-primary">semilla</span> SQL
+          </h1>
+
+          <p
+            className={cn(
+              ENTRANCE_ANIMATION,
+              "delay-75 mt-4 short:mt-2 max-w-prose text-pretty text-base short:text-sm text-muted-foreground"
+            )}
+          >
+            Subí un volcado plano y sin normalizar. Se detectan las dependencias
+            funcionales, las confirmás vos, y de ahí sale un esquema en 3FN.
+          </p>
+
+          {/* El recorrido, enumerado. Dice de entrada que esto es un proceso de
+              tres pasos y no un botón que devuelve un resultado mágico. */}
+          <ol
+            className={cn(
+              ENTRANCE_ANIMATION,
+              "delay-150 mt-7 short:mt-4 grid gap-x-6 gap-y-3 border-t border-border pt-5 short:pt-3 sm:grid-cols-3"
+            )}
+          >
+            {UPLOAD_STEPS.map((step, index) => (
+              <li key={step.title} className="flex gap-3">
+                <span aria-hidden="true" className="font-mono text-xs leading-5 text-primary">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <span className="flex flex-col gap-0.5">
+                  <span className="text-sm font-medium text-foreground">{step.title}</span>
+                  <span className="text-xs text-muted-foreground">{step.detail}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
 
         <div
           className={cn(
             ENTRANCE_ANIMATION,
-            "delay-150 mt-8 short:mt-4 flex w-full max-w-2xl flex-col gap-6 short:gap-3 sm:mt-10 short:sm:mt-6 sm:gap-8 short:sm:gap-4",
+            "delay-200 flex w-full flex-col gap-4 short:gap-3",
             isParsing && "opacity-60 transition-opacity duration-300"
           )}
         >
@@ -277,28 +319,22 @@ export function UploadHero({
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             className={cn(
-              "upload-hero-motion relative flex min-h-56 short:min-h-40 w-full cursor-pointer flex-col items-center justify-center gap-3 short:gap-2 rounded-lg border-2 border-dashed border-border bg-muted/40 px-6 text-center transition-colors duration-200 ease-out has-[:focus-visible]:border-ring has-[:focus-visible]:bg-muted/60 has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50 hover:border-foreground/30 hover:bg-muted/60 sm:min-h-64 short:sm:min-h-44 lg:min-h-72 short:lg:min-h-48",
-              isDraggingOver && "scale-[1.01] border-ring bg-muted/60 ring-3 ring-ring/50"
+              "upload-hero-motion group relative flex min-h-52 short:min-h-36 cursor-pointer flex-col items-center justify-center gap-3 short:gap-2 rounded-sm border border-dashed border-input bg-card px-6 py-10 short:py-6 text-center transition-colors duration-200 ease-out hover:border-primary/60 hover:bg-muted/40 has-[:focus-visible]:border-ring has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50",
+              isDraggingOver && "scale-[1.01] border-primary bg-muted/50 ring-3 ring-ring/50"
             )}
           >
             <Upload
               aria-hidden="true"
               focusable="false"
-              className="size-8 short:size-6 text-muted-foreground"
+              className="upload-hero-motion size-7 short:size-5 text-muted-foreground transition-colors group-hover:text-primary"
             />
-            <div className="flex flex-col gap-1">
-              <span className="text-base short:text-sm font-medium text-foreground sm:text-lg short:sm:text-base">
-                Soltá aquí tu archivo .sql
-              </span>
-              <span className="text-sm text-muted-foreground">
-                o hacé clic para buscar
-              </span>
-            </div>
-            {/* `sr-only`: el `<label>` ya cubre toda la zona de drop y
-                reenvía el clic al input nativamente, así que no hace falta
-                superponerlo de forma invisible. Sigue en el DOM, sigue en el
-                orden de tabulación y `has-[:focus-visible]` en el label
-                refleja su foco. */}
+            <span className="flex flex-col gap-1">
+              <span className="font-medium text-foreground">Soltá aquí tu archivo .sql</span>
+              <span className="text-sm text-muted-foreground">o hacé clic para buscar</span>
+            </span>
+            {/* `sr-only`: el `<label>` ya cubre toda la zona de drop y reenvía
+                el clic al input nativamente. Sigue en el DOM, sigue en el orden
+                de tabulación y `has-[:focus-visible]` refleja su foco. */}
             <Input
               ref={inputRef}
               id="sql-file-input"
@@ -317,24 +353,20 @@ export function UploadHero({
                 {dropError}
               </p>
             ) : selectedFile ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-3 py-2.5 ring-1 ring-foreground/5">
-                <div
-                  id={FILE_STATUS_ID}
-                  className="flex min-w-0 items-center gap-2.5"
-                >
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border-l-2 border-l-primary bg-muted/50 py-2.5 pl-3 pr-2">
+                <span id={FILE_STATUS_ID} className="flex min-w-0 items-center gap-2.5">
                   <CircleCheck
                     aria-hidden="true"
                     focusable="false"
                     className="size-4 shrink-0 text-primary"
                   />
-                  <Badge variant="secondary">.sql</Badge>
-                  <span className="truncate text-sm font-medium text-foreground">
+                  <span className="truncate font-mono text-sm text-foreground">
                     {selectedFile.name}
                   </span>
-                  <span className="shrink-0 text-sm text-muted-foreground">
+                  <span className="shrink-0 font-mono text-xs text-muted-foreground">
                     {formatFileSize(selectedFile.sizeBytes)}
                   </span>
-                </div>
+                </span>
                 <Button
                   type="button"
                   variant="ghost"
@@ -347,13 +379,11 @@ export function UploadHero({
                 </Button>
               </div>
             ) : (
-              <p id={FILE_STATUS_ID} className="text-sm text-muted-foreground">
-                Todavía no se ha seleccionado ningún archivo.
+              <p id={FILE_STATUS_ID} className="font-mono text-xs text-muted-foreground">
+                Ningún archivo seleccionado.
               </p>
             )}
           </div>
-
-          <Separator />
 
           <AnalyzeAction
             disabled={isAnalyzeDisabled}
@@ -367,29 +397,24 @@ export function UploadHero({
           {isParsing ? (
             <div
               aria-hidden="true"
-              className="upload-hero-motion h-1 w-full overflow-hidden rounded-full bg-muted"
+              className="upload-hero-motion h-0.5 w-full overflow-hidden bg-muted"
             >
-              <div className="upload-hero-motion upload-hero-progress-bar h-full w-1/3 rounded-full bg-primary" />
+              <div className="upload-hero-motion upload-hero-progress-bar h-full w-1/3 bg-primary" />
             </div>
           ) : null}
-        </div>
 
-        {selectedFile === null ? (
-          <p
-            className={cn(
-              ENTRANCE_ANIMATION,
-              "delay-200 mt-6 short:mt-3 flex w-full max-w-2xl items-center justify-center gap-2 text-pretty text-sm text-muted-foreground sm:mt-8 short:sm:mt-4"
-            )}
-          >
-            <InfoIcon
-              aria-hidden="true"
-              focusable="false"
-              className="size-4 shrink-0"
-            />
-            Se lee cualquier volcado: SQL Server, MySQL, Oracle o PostgreSQL. Si el
-            archivo declara varias tablas, vas a elegir cuál normalizar.
-          </p>
-        ) : null}
+          {selectedFile === null ? (
+            <p className="flex items-start gap-2 text-pretty text-xs text-muted-foreground">
+              <InfoIcon
+                aria-hidden="true"
+                focusable="false"
+                className="mt-0.5 size-3.5 shrink-0"
+              />
+              Se lee cualquier volcado: SQL Server, MySQL, Oracle o PostgreSQL. Si
+              el archivo declara varias tablas, vas a elegir cuál normalizar.
+            </p>
+          ) : null}
+        </div>
       </div>
     </div>
   )

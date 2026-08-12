@@ -1,14 +1,26 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
+import { Poppins, JetBrains_Mono, Fraunces } from "next/font/google";
 import "./globals.css";
 
-const plusJakartaSans = Plus_Jakarta_Sans({
-  variable: "--font-plus-jakarta-sans",
+// Poppins no es una fuente variable en Google Fonts, así que los pesos se
+// piden de a uno. Solo los cinco que la interfaz usa: cada peso extra es otro
+// archivo que el navegador descarga.
+const poppins = Poppins({
+  variable: "--font-poppins",
   subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
 });
 
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-jetbrains-mono",
+  subsets: ["latin"],
+});
+
+// La serif de los títulos. Es lo que separa esta herramienta de un panel
+// genérico: cuando título y cuerpo comparten familia, la pantalla no tiene voz.
+// Fraunces es variable, así que el peso completo viaja en un solo archivo.
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
   subsets: ["latin"],
 });
 
@@ -22,7 +34,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="es"
-      className={`${plusJakartaSans.variable} ${jetbrainsMono.variable} antialiased`}
+      className={`${poppins.variable} ${jetbrainsMono.variable} ${fraunces.variable} antialiased`}
     >
       {/*
         La página hace scroll normal, con UNA sola barra.

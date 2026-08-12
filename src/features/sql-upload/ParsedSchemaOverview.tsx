@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import type { ParsedDatabase, SqlDialect } from "@/domain"
+import { cn } from "@/lib/utils"
 
 import { describeParsedTable, resolveSelectedTable, totalRowCount } from "./describeParsedTable"
 import { ParsedTableDetail } from "./ParsedTableDetail"
@@ -64,9 +65,25 @@ export function ParsedSchemaOverview({
         </p>
       </CardHeader>
 
-      <CardContent className="flex flex-col gap-5">
+      {/* Índice a la izquierda, detalle a la derecha. Apilado, la lista de
+          tablas comía una franja entera de ancho y dejaba muerto todo lo que
+          quedaba a su derecha; en dos columnas se ve el catálogo completo
+          MIENTRAS se mira una tabla, que es justo lo que pide elegir entre
+          varias. La rejilla solo se arma cuando hay más de una: con una sola
+          tabla no hay índice, y el detalle no debe quedar en la columna
+          angosta. */}
+      <CardContent
+        className={cn(
+          "flex flex-col gap-5",
+          hasChoice && "lg:grid lg:grid-cols-[minmax(11rem,16rem)_1fr] lg:items-start lg:gap-6"
+        )}
+      >
         {hasChoice ? (
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Tablas encontradas">
+          <div
+            className="flex flex-wrap gap-2 lg:flex-col lg:flex-nowrap lg:border-r lg:border-border lg:pr-6"
+            role="group"
+            aria-label="Tablas encontradas"
+          >
             {database.tables.map((table) => {
               const described = describeParsedTable(table)
               const isSelected = selected?.name === table.name
@@ -78,10 +95,10 @@ export function ParsedSchemaOverview({
                   size="sm"
                   aria-pressed={isSelected}
                   onClick={() => onSelectTable(table.name)}
-                  className="h-auto flex-col items-start gap-0.5 py-2"
+                  className="h-auto flex-col items-start gap-0.5 py-2 lg:w-full"
                 >
                   <span className="font-mono text-xs">{table.name}</span>
-                  <span className="text-[0.6875rem] font-normal opacity-80">
+                  <span className="text-xs font-normal opacity-80">
                     {described.columns.length} col · {described.rowCount} filas
                   </span>
                 </Button>
@@ -91,13 +108,17 @@ export function ParsedSchemaOverview({
         ) : null}
 
         {selected !== null ? (
-          <>
-            {hasChoice ? <Separator /> : null}
+          <div className="min-w-0">
+            {/* El separador solo tiene sentido apilado: en dos columnas ya
+                separa el borde del índice. */}
+            {hasChoice ? <Separator className="mb-5 lg:hidden" /> : null}
             <ParsedTableDetail table={selected} />
-          </>
+          </div>
         ) : null}
 
-        <ParseWarnings database={database} />
+        <div className={cn(hasChoice && "lg:col-span-2")}>
+          <ParseWarnings database={database} />
+        </div>
       </CardContent>
     </Card>
   )

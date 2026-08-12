@@ -17,7 +17,7 @@ export default function Home() {
       <main
         id="main-content"
         tabIndex={-1}
-        className="mx-auto flex w-full max-w-7xl min-h-0 flex-1 flex-col gap-5 px-4 py-6 focus:outline-2 focus:outline-offset-4 focus:outline-ring sm:px-6 sm:py-8"
+        className="mx-auto flex w-full max-w-[96rem] min-h-0 flex-1 flex-col gap-5 px-4 py-6 focus:outline-2 focus:outline-offset-4 focus:outline-ring sm:px-6 sm:py-8 2xl:px-10"
       >
         <SqlUploadContainer />
       </main>
