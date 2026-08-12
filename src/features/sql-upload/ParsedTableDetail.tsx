@@ -38,13 +38,26 @@ export function ParsedTableDetail({ table }: ParsedTableDetailProps) {
       <div className="flex flex-col gap-3">
         <h4 className="text-sm font-medium text-foreground">Columnas declaradas</h4>
 
-        <ul className="flex flex-col gap-1">
+        {/*
+          `role="list"` explícito: al darle `display: grid` a un `<ul>`, WebKit
+          le quita la semántica de lista y VoiceOver deja de anunciar cuántos
+          elementos hay. El rol se lo devuelve.
+
+          Las columnas se acomodan solas con `auto-fill` en vez de breakpoints
+          fijos porque este panel se renderiza a dos anchos muy distintos: a
+          página completa cuando el archivo trae una sola tabla, y dentro de la
+          columna derecha del índice cuando trae varias.
+        */}
+        <ul
+          role="list"
+          className="grid grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] gap-1.5"
+        >
           {described.columns.map((column) => (
             <li
               key={column.name}
-              className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-md border border-border px-2.5 py-1.5"
+              className="flex min-w-0 flex-col gap-0.5 rounded-md border border-border px-2.5 py-1.5"
             >
-              <span className="flex min-w-0 items-center gap-2">
+              <span className="flex min-w-0 items-center gap-1.5">
                 <span className="truncate font-mono text-xs text-foreground">{column.name}</span>
                 {column.role.isPrimaryKey ? (
                   <Badge variant="default" className="shrink-0 font-normal">
@@ -58,10 +71,15 @@ export function ParsedTableDetail({ table }: ParsedTableDetailProps) {
                 ) : null}
               </span>
 
-              <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-                <span className="font-mono">{column.sqlType}</span>
-                <span aria-hidden="true">·</span>
-                <span>{column.nullable ? "acepta nulos" : "obligatoria"}</span>
+              {/* Sin envolver y sin separador: en una pista angosta el punto
+                  quedaba huérfano al principio de la segunda línea. Con los
+                  extremos fijados, el tipo se recorta y la nulabilidad —que es
+                  corta y no se puede adivinar— siempre se lee entera. */}
+              <span className="flex min-w-0 items-baseline justify-between gap-2 text-xs text-muted-foreground">
+                <span className="truncate font-mono">{column.sqlType}</span>
+                <span className="shrink-0">
+                  {column.nullable ? "acepta nulos" : "obligatoria"}
+                </span>
               </span>
             </li>
           ))}
