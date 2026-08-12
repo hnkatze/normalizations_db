@@ -15,9 +15,14 @@ import type { NormalForm } from "@/domain"
  * si el tipo se declarara aparte, olvidarse de agregar un paso acá compilaría
  * igual y ese paso quedaría inalcanzable en silencio. El `satisfies` mantiene
  * el vínculo con el dominio, así que un `"2FN"` mal escrito no pasa.
+ *
+ * `schema` existe porque un archivo declara VARIAS tablas y 3FN está definida
+ * sobre UNA relación. Elegir cuál se analiza es una decisión del usuario, no
+ * un detalle de la carga, así que ocupa su propio paso.
  */
-export const WORKSPACE_STEPS = ["upload", "1NF", "2NF", "3NF"] as const satisfies readonly (
+export const WORKSPACE_STEPS = ["upload", "schema", "1NF", "2NF", "3NF"] as const satisfies readonly (
   | "upload"
+  | "schema"
   | NormalForm
 )[]
 
@@ -25,7 +30,10 @@ export type WorkspaceStep = (typeof WORKSPACE_STEPS)[number]
 
 /** Qué tiene hecho el usuario hasta ahora, que es lo que abre cada paso. */
 export type StepAvailability = {
-  readonly hasAnalysis: boolean
+  /** El archivo subido se leyó y se sabe qué tablas declara. */
+  readonly hasParsedFile: boolean
+  /** De esas tablas, hay una elegida para analizar. */
+  readonly hasSelectedTable: boolean
   /** Hay clave primaria elegida y al menos una regla confirmada. */
   readonly isSchemaReady: boolean
 }
@@ -34,14 +42,21 @@ export function isStepAvailable(step: WorkspaceStep, availability: StepAvailabil
   switch (step) {
     case "upload":
       return true
+    case "schema":
+      return availability.hasParsedFile
     case "1NF":
-      return availability.hasAnalysis
+      // Se exigen las dos señales aunque elegir tabla implique haber leído el
+      // archivo: así una combinación incoherente cierra el paso en vez de
+      // abrir una pantalla sin datos que mostrar.
+      return availability.hasParsedFile && availability.hasSelectedTable
     case "2NF":
     case "3NF":
       // 1FN es donde se decide. Sin clave y sin ninguna regla confirmada no
       // hay descomposición que mostrar, y una pantalla vacía le pide al
       // usuario que interprete una ausencia.
-      return availability.hasAnalysis && availability.isSchemaReady
+      return (
+        availability.hasParsedFile && availability.hasSelectedTable && availability.isSchemaReady
+      )
     default: {
       const unhandled: never = step
       throw new Error(`workspaceSteps: paso no contemplado ${String(unhandled)}`)
@@ -97,7 +112,22 @@ export function stepBefore(step: WorkspaceStep): WorkspaceStep | null {
 
 /** `3NF` es el vocabulario del dominio; esto es el del usuario. */
 export function stepLabel(step: WorkspaceStep): string {
-  return step === "upload" ? "Subir" : step.replace("NF", "FN")
+  switch (step) {
+    case "upload":
+      return "Subir"
+    case "schema":
+      // Nombrado por lo que el usuario hace ahí, no por lo que la app carga:
+      // "Esquema" describe el dato, "Tablas" describe la elección.
+      return "Tablas"
+    case "1NF":
+    case "2NF":
+    case "3NF":
+      return step.replace("NF", "FN")
+    default: {
+      const unhandled: never = step
+      throw new Error(`workspaceSteps: paso sin etiqueta ${String(unhandled)}`)
+    }
+  }
 }
 
 /**
@@ -114,7 +144,22 @@ export function stepUnlockHint(
   if (isStepAvailable(step, availability)) {
     return null
   }
-  return step === "1NF"
-    ? "disponible después de analizar un archivo"
-    : "disponible después de elegir la clave primaria y confirmar al menos una regla"
+  switch (step) {
+    case "upload":
+      // Inalcanzable: "upload" siempre está disponible, así que la guarda de
+      // arriba ya devolvió `null`. Está enumerado para que agregar un paso
+      // nuevo rompa la compilación en vez de heredar la pista equivocada.
+      return null
+    case "schema":
+      return "disponible después de subir un archivo"
+    case "1NF":
+      return "disponible después de elegir una tabla"
+    case "2NF":
+    case "3NF":
+      return "disponible después de elegir la clave primaria y confirmar al menos una regla"
+    default: {
+      const unhandled: never = step
+      throw new Error(`workspaceSteps: paso sin pista de desbloqueo ${String(unhandled)}`)
+    }
+  }
 }

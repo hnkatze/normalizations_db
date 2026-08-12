@@ -8,7 +8,15 @@ import type { ParseState } from "./parseState"
 
 export type ParseSql = {
   readonly state: ParseState
-  readonly parseFile: (file: File) => Promise<void>
+  /**
+   * Devuelve el estado con el que terminó la lectura.
+   *
+   * Quien llama necesita decidir en el mismo evento —por ejemplo, avanzar de
+   * paso— y leer `state` justo después no serviría: todavía tiene el valor
+   * del renderizado en curso. Reaccionar con un efecto al cambio de estado
+   * sería sincronizar dos fuentes en vez de responder a un evento.
+   */
+  readonly parseFile: (file: File) => Promise<ParseState>
   readonly clear: () => void
 }
 
@@ -23,7 +31,12 @@ export type ParseSql = {
 export function useParseSql(): ParseSql {
   const [state, setState] = useState<ParseState>({ status: "idle" })
 
-  async function parseFile(file: File) {
+  function commit(next: ParseState): ParseState {
+    setState(next)
+    return next
+  }
+
+  async function parseFile(file: File): Promise<ParseState> {
     setState({ status: "parsing", fileName: file.name })
 
     let response: Response
@@ -32,11 +45,10 @@ export function useParseSql(): ParseSql {
     } catch {
       // Un `fetch` que rechaza es red caída o petición abortada; nunca es una
       // respuesta de error, porque un 4xx o 5xx resuelve normalmente.
-      setState({
+      return commit({
         status: "error",
         message: "No se pudo contactar al servicio de lectura. Revisá tu conexión.",
       })
-      return
     }
 
     if (response.status === 404) {
@@ -44,23 +56,21 @@ export function useParseSql(): ParseSql {
       // está levantado: `next dev` no ejecuta funciones de Python por su
       // cuenta. Decirlo explícitamente ahorra el rato de buscar el error en el
       // código de la aplicación, donde no está.
-      setState({
+      return commit({
         status: "error",
         message:
           "El servicio de lectura no respondió. En desarrollo hay que levantarlo aparte con `npm run dev:parser`.",
       })
-      return
     }
 
     const body: unknown = await response.json().catch(() => null)
     const parsed = parseSchemaResponse(body)
 
     if (!parsed.ok) {
-      setState({ status: "error", message: parsed.message })
-      return
+      return commit({ status: "error", message: parsed.message })
     }
 
-    setState({ status: "ok", fileName: file.name, database: parsed.database })
+    return commit({ status: "ok", fileName: file.name, database: parsed.database })
   }
 
   function clear() {

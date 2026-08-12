@@ -1,23 +1,24 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import type { AnalysisState } from "./analysisState"
-import { ANALYZE_ENDPOINT, ANALYZE_FILE_FIELD } from "./analyzeContract"
+import { analyzeParsedTable, type ParsedTableAnalysis } from "./analyzeParsedTable"
 import { DependencyReview } from "./DependencyReview"
+import { resolveSelectedTable } from "./describeParsedTable"
 import { FlatTableOverview } from "./FlatTableOverview"
 import { buildNormalizationGates } from "./normalizationGates"
 import { computeNormalizationOutcome } from "./normalizationOutcome"
 import { NormalizationGateChecklist } from "./NormalizationGateChecklist"
-import { parseAnalyzeResponse } from "./parseAnalyzeResponse"
 import { NormalizedSchemaSection } from "./NormalizedSchemaSection"
+import { ParsedSchemaOverview } from "./ParsedSchemaOverview"
 import { PrimaryKeySelector } from "./PrimaryKeySelector"
 import { PrimaryKeySuggestion } from "./PrimaryKeySuggestion"
 import { confirmedDependenciesOf } from "./reviewedDependencies"
 import { suggestPrimaryKey } from "./suggestPrimaryKey"
 import { UploadHero, type SelectedSqlFile } from "./UploadHero"
+import { useParseSql } from "./useParseSql"
 import { useSchemaReview } from "./useSchemaReview"
 import { WorkspaceStepper } from "./WorkspaceStepper"
 import {
@@ -32,19 +33,52 @@ import {
 export function SqlUploadContainer() {
   const [file, setFile] = useState<File | null>(null)
   const [resetToken, setResetToken] = useState(0)
-  const [analysisState, setAnalysisState] = useState<AnalysisState>({ status: "idle" })
   const [requestedStep, setRequestedStep] = useState<WorkspaceStep>("upload")
-  // Remonta DependencyReview en cada análisis exitoso para que su número de
-  // página interno vuelva a 1. Es el mismo recurso de remontaje que
-  // `resetToken` usa para el input de archivo, y evita un efecto que
-  // sincronice estado con props.
+  // Dos nombres y no uno: el que se está MIRANDO en el paso de tablas y el que
+  // se comprometió al análisis. Fusionarlos obligaría a analizar cada tabla que
+  // el usuario abre solo para verla, y le sacaría la posibilidad de comparar
+  // antes de decidir.
+  const [previewTableName, setPreviewTableName] = useState<string | null>(null)
+  const [analyzedTableName, setAnalyzedTableName] = useState<string | null>(null)
+  // Remonta DependencyReview en cada análisis para que su número de página
+  // interno vuelva a 1. Es el mismo recurso de remontaje que `resetToken` usa
+  // para el input de archivo, y evita un efecto que sincronice estado con props.
   const [analysisId, setAnalysisId] = useState(0)
+  const parse = useParseSql()
   const schemaReview = useSchemaReview()
   const stepHeadingRef = useRef<HTMLHeadingElement>(null)
+  // En "upload" el h2 del contenedor va `sr-only`, y `sr-only` recorta a 1x1px
+  // el anillo de foco junto con el elemento. El destino tiene que ser el h1
+  // visible del hero, o quien navega por teclado queda enfocado en la nada.
+  const uploadHeadingRef = useRef<HTMLHeadingElement>(null)
+
+  const database = parse.state.status === "ok" ? parse.state.database : null
+  const previewTable = database === null ? null : resolveSelectedTable(database, previewTableName)
+  const analyzedTable =
+    database === null || analyzedTableName === null
+      ? null
+      : (database.tables.find((table) => table.name === analyzedTableName) ?? null)
+
+  // El análisis se DERIVA de la tabla comprometida, no se guarda: dos fuentes
+  // de verdad se desincronizarían apenas el usuario cambiara de tabla.
+  //
+  // `useMemo` acá no es especulativo. La detección es combinatoria sobre filas
+  // por columnas y este contenedor vuelve a renderizar en cada casilla que se
+  // marca durante la revisión; sin memo, cada clic recorrería el archivo entero
+  // de nuevo. La dependencia es estable porque `analyzedTable` es la misma
+  // referencia dentro de `database` mientras no se lea otro archivo.
+  const analysis = useMemo<ParsedTableAnalysis | null>(
+    () => (analyzedTable === null ? null : analyzeParsedTable(analyzedTable)),
+    [analyzedTable],
+  )
 
   const confirmedDependencies = confirmedDependenciesOf(schemaReview.reviewed)
   const availability: StepAvailability = {
-    hasAnalysis: analysisState.status === "ok",
+    // Un estado `ok` siempre trae al menos una tabla: `parseSchemaResponse`
+    // rechaza antes el archivo que no declara ninguna. Volver a comprobarlo acá
+    // sería un segundo lugar donde ese invariante puede quedar desactualizado.
+    hasParsedFile: database !== null,
+    hasSelectedTable: analysis !== null,
     isSchemaReady: schemaReview.primaryKey.length > 0 && confirmedDependencies.length > 0,
   }
   // El paso EFECTIVO, no el pedido: desmarcar la última regla estando en 3FN
@@ -55,17 +89,23 @@ export function SqlUploadContainer() {
   // foco tiene que viajar con él: sin esto, quien navega por teclado queda
   // parado sobre un nodo que ya no está en pantalla.
   //
-  // La guarda es "primer renderizado", no "paso distinto de upload". Volver a
-  // Subir desmonta la barra inferior donde vive el botón que se acaba de
-  // pulsar, así que ESE es justamente el caso en que el foco se cae al body
-  // si no se lo mueve. Solo el montaje inicial debe quedar exento.
-  const isFirstRender = useRef(true)
+  // Se exime el montaje inicial, no los pasos: volver a Subir desmonta la
+  // barra inferior donde vive el botón que se acaba de pulsar, así que ESE es
+  // justamente el caso en que el foco se cae al body si no se lo mueve.
+  //
+  // Se compara contra el paso ANTERIOR en vez de llevar una bandera de "primer
+  // renderizado": StrictMode invoca cada efecto dos veces en desarrollo sin
+  // desmontar de verdad, así que los refs sobreviven entre las dos pasadas y
+  // una bandera queda consumida por la primera — la segunda la encuentra ya en
+  // falso y mueve el foco al cargar la página, que es exactamente lo que la
+  // exención del montaje inicial quería evitar. Comparar es idempotente.
+  const lastFocusedStep = useRef<WorkspaceStep>(step)
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false
+    if (lastFocusedStep.current === step) {
       return
     }
-    const heading = stepHeadingRef.current
+    lastFocusedStep.current = step
+    const heading = step === "upload" ? uploadHeadingRef.current : stepHeadingRef.current
     if (heading === null) {
       return
     }
@@ -83,56 +123,63 @@ export function SqlUploadContainer() {
     ? { name: file.name, sizeBytes: file.size }
     : null
 
+  /** Todo lo que pertenecía al archivo anterior y no sobrevive a uno nuevo. */
+  function forgetSelection() {
+    setPreviewTableName(null)
+    setAnalyzedTableName(null)
+    schemaReview.startReview([])
+  }
+
   function handleFileChange(nextFile: File) {
     setFile(nextFile)
-    setAnalysisState({ status: "idle" })
+    parse.clear()
+    forgetSelection()
   }
 
   function handleClear() {
     setFile(null)
-    setAnalysisState({ status: "idle" })
+    parse.clear()
+    forgetSelection()
     setRequestedStep("upload")
     // Fuerza el remontaje del input de archivo para que volver a seleccionar el mismo archivo dispare onChange de nuevo.
     setResetToken((token) => token + 1)
   }
 
   function handleAnalyze() {
-    if (file === null || analysisState.status === "analyzing") {
+    if (file === null || parse.state.status === "parsing") {
       return
     }
-    // Fire-and-forget desde este manejador síncrono: runAnalysis nunca
-    // rechaza, siempre resuelve mediante una llamada a setAnalysisState.
-    void runAnalysis(file)
+    // Fire-and-forget desde este manejador síncrono: runParse nunca rechaza,
+    // porque `parseFile` resuelve siempre con un estado, también en el error.
+    void runParse(file)
   }
 
-  async function runAnalysis(sqlFile: File) {
-    setAnalysisState({ status: "analyzing" })
-
-    const formData = new FormData()
-    formData.set(ANALYZE_FILE_FIELD, sqlFile)
-
-    try {
-      const response = await fetch(ANALYZE_ENDPOINT, { method: "POST", body: formData })
-      const payload: unknown = await response.json()
-      const result = parseAnalyzeResponse(payload)
-
-      if (result.ok) {
-        setAnalysisState({ status: "ok", response: result })
-        // Un análisis nuevo implica una revisión nueva: nunca trasladar la
-        // clave o las confirmaciones de la tabla anterior a un conjunto de columnas distinto.
-        schemaReview.startReview(result.detection.dependencies)
-        setAnalysisId((id) => id + 1)
-        setRequestedStep("1NF")
-      } else {
-        setAnalysisState({ status: "error", message: result.message })
-      }
-    } catch (e) {
-      const detail = e instanceof Error ? e.message : "error de red desconocido"
-      setAnalysisState({
-        status: "error",
-        message: `No se pudo conectar con el servidor: ${detail}`,
-      })
+  async function runParse(sqlFile: File) {
+    forgetSelection()
+    const result = await parse.parseFile(sqlFile)
+    // El estado llega devuelto y no leído de `parse.state`, que todavía tiene
+    // el valor del renderizado en curso.
+    if (result.status === "ok") {
+      setRequestedStep("schema")
     }
+  }
+
+  function handleAnalyzeTable(tableName: string) {
+    const chosen = database?.tables.find((table) => table.name === tableName) ?? null
+    if (chosen === null) {
+      return
+    }
+    setAnalyzedTableName(tableName)
+    // Una tabla nueva es una revisión nueva: nunca trasladar la clave ni las
+    // confirmaciones a un conjunto de columnas distinto.
+    //
+    // El análisis se calcula acá y otra vez en el memo del renderizado
+    // siguiente. Es a propósito: guardarlo en estado para ahorrar esa segunda
+    // pasada crearía la copia desincronizable que el memo justamente evita, y
+    // el costo se paga una vez por tabla elegida, no por renderizado.
+    schemaReview.startReview(analyzeParsedTable(chosen).detection.dependencies)
+    setAnalysisId((id) => id + 1)
+    setRequestedStep("1NF")
   }
 
   const nextStep = stepAfter(step, availability)
@@ -144,14 +191,12 @@ export function SqlUploadContainer() {
           el documento necesita el suyo igual — nunca cero, nunca dos. */}
       {step === "upload" ? null : (
         <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground">
-          {analysisState.status === "ok"
-            ? analysisState.response.table.name
-            : "Normaliza tu semilla SQL"}
+          {analysis?.table.name ?? "Normaliza tu semilla SQL"}
         </h1>
       )}
 
-      {/* En "upload" no hay nada que navegar todavía — 1FN/2FN/3FN siguen
-          cerrados— y el stepper solo agrega ruido y altura a una vista que
+      {/* En "upload" no hay nada que navegar todavía — el resto sigue
+          cerrado— y el stepper solo agrega ruido y altura a una vista que
           además tiene que entrar sin scroll. */}
       {step === "upload" ? null : (
         <WorkspaceStepper current={step} availability={availability} onSelect={setRequestedStep} />
@@ -169,38 +214,48 @@ export function SqlUploadContainer() {
         tabIndex={-1}
         className={cn(
           "font-heading text-lg font-semibold tracking-tight text-foreground",
+          "focus:outline-2 focus:outline-offset-4 focus:outline-ring",
           step === "upload" && "sr-only"
         )}
       >
-        {headingFor(step, analysisState)}
+        {headingFor(step, analysis)}
       </h2>
 
       <div className="flex flex-1 flex-col min-h-0">
         {step === "upload" ? (
           <UploadHero
+            headingRef={uploadHeadingRef}
             selectedFile={selectedFile}
             resetToken={resetToken}
-            analysisState={analysisState}
+            parseState={parse.state}
             onFileChange={handleFileChange}
             onClear={handleClear}
             onAnalyze={handleAnalyze}
           />
         ) : null}
 
-        {step === "1NF" && analysisState.status === "ok" ? (
+        {step === "schema" && database !== null ? (
+          <ParsedSchemaOverview
+            database={database}
+            selectedTableName={previewTableName}
+            onSelectTable={setPreviewTableName}
+          />
+        ) : null}
+
+        {step === "1NF" && analysis !== null ? (
           // `items-start` para que las dos columnas conserven su alto natural
           // en vez de estirarse hasta la más alta y dejar un hueco muerto.
           <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
             <div className="flex flex-col gap-4">
               <FlatTableOverview
-                tableName={analysisState.response.table.name}
-                columns={analysisState.response.table.columns}
-                dependencies={analysisState.response.detection.dependencies}
+                tableName={analysis.table.name}
+                columns={analysis.table.columns}
+                dependencies={analysis.detection.dependencies}
               />
               <PrimaryKeySuggestion
                 suggestion={suggestPrimaryKey(
-                  analysisState.response.detection.dependencies,
-                  analysisState.response.table.columns.map((column) => column.name),
+                  analysis.detection.dependencies,
+                  analysis.table.columns.map((column) => column.name),
                 )}
                 onApply={schemaReview.applySuggestedPrimaryKey}
               />
@@ -208,7 +263,7 @@ export function SqlUploadContainer() {
                 {schemaReview.primaryKeyAnnouncement}
               </p>
               <PrimaryKeySelector
-                columns={analysisState.response.table.columns}
+                columns={analysis.table.columns}
                 selected={schemaReview.primaryKey}
                 onToggle={schemaReview.toggleKeyColumn}
               />
@@ -217,8 +272,8 @@ export function SqlUploadContainer() {
             <div>
               <DependencyReview
                 key={analysisId}
-                tableName={analysisState.response.table.name}
-                detection={analysisState.response.detection}
+                tableName={analysis.table.name}
+                detection={analysis.detection}
                 reviewed={schemaReview.reviewed}
                 onToggleConfirm={schemaReview.toggleConfirmedDependency}
                 onSetGroupDecision={schemaReview.setGroupDecision}
@@ -227,15 +282,15 @@ export function SqlUploadContainer() {
           </div>
         ) : null}
 
-        {(step === "2NF" || step === "3NF") && analysisState.status === "ok" ? (
+        {(step === "2NF" || step === "3NF") && analysis !== null ? (
           <NormalizedSchemaSection
-            originalTableName={analysisState.response.table.name}
-            originalColumnCount={analysisState.response.table.columns.length}
+            originalTableName={analysis.table.name}
+            originalColumnCount={analysis.table.columns.length}
             confirmedDependencyCount={confirmedDependencies.length}
             primaryKeyColumnCount={schemaReview.primaryKey.length}
             normalForm={step}
             outcome={computeNormalizationOutcome({
-              table: { ...analysisState.response.table, rows: [] },
+              table: { ...analysis.table, rows: [] },
               primaryKey: schemaReview.primaryKey,
               confirmedDependencies,
             })}
@@ -243,16 +298,16 @@ export function SqlUploadContainer() {
         ) : null}
       </div>
 
-      {analysisState.status === "ok" && step !== "upload" ? (
+      {step === "upload" ? null : (
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
           {/* Los portones solo se explican donde se resuelven: en 1FN. */}
           <div className="min-w-0">
-            {step === "1NF" && nextStep === null ? (
+            {step === "1NF" && nextStep === null && analysis !== null ? (
               <NormalizationGateChecklist
                 gates={buildNormalizationGates(
                   schemaReview.primaryKey,
                   confirmedDependencies.length,
-                  analysisState.response.detection.dependencies.length,
+                  analysis.detection.dependencies.length,
                 )}
               />
             ) : null}
@@ -261,27 +316,37 @@ export function SqlUploadContainer() {
           <div className="flex shrink-0 items-center gap-2">
             {previousStep === null ? null : (
               <Button type="button" variant="ghost" onClick={() => setRequestedStep(previousStep)}>
-                &larr; Volver a {stepLabel(previousStep)}
+                <span aria-hidden="true">&larr;</span> Volver a {stepLabel(previousStep)}
               </Button>
             )}
-            {nextStep === null ? null : (
+            {/* En "schema" el avance no es navegación: comprometer una tabla
+                arranca un análisis y descarta la revisión anterior, así que
+                el botón nombra la tabla en vez de nombrar el paso. */}
+            {step === "schema" && previewTable !== null ? (
+              <Button type="button" onClick={() => handleAnalyzeTable(previewTable.name)}>
+                Normalizar {previewTable.name} <span aria-hidden="true">&rarr;</span>
+              </Button>
+            ) : null}
+            {step !== "schema" && nextStep !== null ? (
               <Button type="button" onClick={() => setRequestedStep(nextStep)}>
-                Ver {stepLabel(nextStep)} &rarr;
+                Ver {stepLabel(nextStep)} <span aria-hidden="true">&rarr;</span>
               </Button>
-            )}
+            ) : null}
           </div>
         </div>
-      ) : null}
+      )}
     </div>
   )
 }
 
-function headingFor(step: WorkspaceStep, analysisState: AnalysisState): string {
-  const tableName = analysisState.status === "ok" ? analysisState.response.table.name : ""
+function headingFor(step: WorkspaceStep, analysis: ParsedTableAnalysis | null): string {
+  const tableName = analysis?.table.name ?? ""
 
   switch (step) {
     case "upload":
       return "Subí una semilla SQL"
+    case "schema":
+      return "Elegí qué tabla vas a normalizar"
     case "1NF":
       return `1FN — ${tableName}, una sola tabla con todo adentro`
     case "2NF":

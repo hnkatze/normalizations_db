@@ -1,4 +1,4 @@
-import type { ChangeEvent, DragEvent } from "react"
+import type { ChangeEvent, DragEvent, RefObject } from "react"
 import { useEffect, useRef, useState } from "react"
 import { CircleCheck, InfoIcon, Upload, XIcon } from "lucide-react"
 
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 import { AnalyzeAction, ANALYSIS_STATUS_ID } from "./AnalyzeAction"
-import type { AnalysisState } from "./analysisState"
+import type { ParseState } from "./parseState"
 import { formatFileSize } from "./formatFileSize"
 
 export type SelectedSqlFile = {
@@ -17,9 +17,16 @@ export type SelectedSqlFile = {
 }
 
 type UploadHeroProps = {
+  /**
+   * El h1 de este hero es el destino del foco al entrar en el paso "upload".
+   * El contenedor no puede usar su propio h2 acá: en este paso va `sr-only`, y
+   * un `sr-only` recorta a 1x1px también el anillo de foco, dejando a quien
+   * navega por teclado sin ninguna señal de dónde está.
+   */
+  readonly headingRef: RefObject<HTMLHeadingElement | null>
   readonly selectedFile: SelectedSqlFile | null
   readonly resetToken: number
-  readonly analysisState: AnalysisState
+  readonly parseState: ParseState
   readonly onFileChange: (file: File) => void
   readonly onClear: () => void
   readonly onAnalyze: () => void
@@ -41,9 +48,10 @@ const ENTRANCE_ANIMATION =
  * props que antes resolvía `SqlUploadCard` y solo lo delega hacia arriba.
  */
 export function UploadHero({
+  headingRef,
   selectedFile,
   resetToken,
-  analysisState,
+  parseState,
   onFileChange,
   onClear,
   onAnalyze,
@@ -54,16 +62,32 @@ export function UploadHero({
   const [isDraggingOver, setIsDraggingOver] = useState(false)
   const [dropError, setDropError] = useState<string | null>(null)
 
+  // La guarda es "me acabo de montar", no "resetToken sigue en cero".
+  //
+  // Antes alcanzaba con mirar el contador porque este hero se montaba una sola
+  // vez. Ahora se desmonta al salir del paso "upload" y se remonta al volver,
+  // y en ese remontaje el contador ya viene distinto de cero: sin esta guarda
+  // el hero reclamaría el foco del input en cada vuelta, compitiendo con el
+  // contenedor, que es el dueño del foco al cambiar de paso. Ese foco lo pisa
+  // igual, así que era trabajo perdido, pero dos autoridades sobre el foco es
+  // exactamente la clase de cosa que después se rompe de forma intermitente.
+  //
+  // El caso que este efecto SÍ tiene que cubrir sigue vivo: al hacer Clear ya
+  // estando en "upload" el paso no cambia, el contenedor no mueve nada, y sin
+  // esto el foco se caería al body junto con el input que se remonta.
+  //
+  // Se compara contra el contador ANTERIOR en vez de llevar una bandera de
+  // "primer renderizado": StrictMode invoca cada efecto dos veces en
+  // desarrollo sin desmontar de verdad, así que los refs sobreviven entre las
+  // dos pasadas y una bandera queda consumida por la primera — la segunda la
+  // encuentra ya en falso y enfoca igual. Comparar es idempotente: la segunda
+  // pasada ve el contador ya guardado y no hace nada.
+  const lastHandledReset = useRef(resetToken)
   useEffect(() => {
-    // resetToken solo se incrementa al hacer Clear (empieza en 0), así que se
-    // omite el montaje inicial y luego se restaura el foco al input remontado.
-    // Este efecto existe únicamente para mover el foco hacia el input
-    // remontado — reiniciar el estado aquí en lugar de en el manejador que lo
-    // causó encadenaría un renderizado adicional, que es justamente lo que
-    // advierte `react-hooks/set-state-in-effect`.
-    if (resetToken === 0) {
+    if (lastHandledReset.current === resetToken) {
       return
     }
+    lastHandledReset.current = resetToken
     inputRef.current?.focus()
   }, [resetToken])
 
@@ -195,15 +219,15 @@ export function UploadHero({
     onFileChange(file)
   }
 
-  const isAnalyzing = analysisState.status === "analyzing"
-  const isAnalyzeDisabled = selectedFile === null || isAnalyzing
+  const isParsing = parseState.status === "parsing"
+  const isAnalyzeDisabled = selectedFile === null || isParsing
 
   return (
     // Cero aritmética de alto: `flex-1` toma lo que sobra de la cadena flex
     // que arranca en <body> (min-h-dvh) y atraviesa <main> y el contenedor
     // del paso (ambos flex-1 + min-h-0). Cuando el contenido entra, el hero
     // se estira exacto hasta llenar el viewport y queda centrado — sin
-    // calcular la altura de AppHeader ni del padding de <main> a mano, que
+    // calcular la altura del encabezado ni del padding de <main> a mano, que
     // es justo lo que se rompía antes con un solo píxel de diferencia. Si el
     // contenido no entra igual, no hay `overflow-hidden` en ningún eslabón,
     // así que la página simplemente crece y aparece scroll normal.
@@ -217,8 +241,11 @@ export function UploadHero({
     <div className="flex flex-1 flex-col items-center justify-center px-4 py-10 short:py-4 sm:px-6 sm:py-14 short:sm:py-6">
       <div className="flex w-full max-w-3xl flex-col items-center text-center">
         <h1
+          ref={headingRef}
+          tabIndex={-1}
           className={cn(
             ENTRANCE_ANIMATION,
+            "focus:outline-2 focus:outline-offset-4 focus:outline-ring",
             "text-balance font-heading text-3xl short:text-2xl font-semibold tracking-tight text-foreground sm:text-4xl short:sm:text-3xl lg:text-5xl short:lg:text-4xl"
           )}
         >
@@ -239,7 +266,7 @@ export function UploadHero({
           className={cn(
             ENTRANCE_ANIMATION,
             "delay-150 mt-8 short:mt-4 flex w-full max-w-2xl flex-col gap-6 short:gap-3 sm:mt-10 short:sm:mt-6 sm:gap-8 short:sm:gap-4",
-            isAnalyzing && "opacity-60 transition-opacity duration-300"
+            isParsing && "opacity-60 transition-opacity duration-300"
           )}
         >
           <label
@@ -330,14 +357,14 @@ export function UploadHero({
 
           <AnalyzeAction
             disabled={isAnalyzeDisabled}
-            analysisState={analysisState}
+            parseState={parseState}
             describedBy={`${FILE_STATUS_ID} ${ANALYSIS_STATUS_ID}`}
             onAnalyze={onAnalyze}
           />
 
           {/* Puramente visual: el estado ya se anuncia por el aria-live de
               AnalyzeAction, así que este indicador no necesita otro. */}
-          {isAnalyzing ? (
+          {isParsing ? (
             <div
               aria-hidden="true"
               className="upload-hero-motion h-1 w-full overflow-hidden rounded-full bg-muted"
@@ -359,8 +386,8 @@ export function UploadHero({
               focusable="false"
               className="size-4 shrink-0"
             />
-            La semilla debe ser una única tabla plana y no normalizada; los
-            esquemas con varias tablas todavía no son compatibles.
+            Se lee cualquier volcado: SQL Server, MySQL, Oracle o PostgreSQL. Si el
+            archivo declara varias tablas, vas a elegir cuál normalizar.
           </p>
         ) : null}
       </div>
