@@ -80,10 +80,19 @@ describe("parseSchemaResponse", () => {
     expect(parseSchemaResponse(body).ok).toBe(false)
   })
 
-  it("rejects a database with no tables", () => {
+  it("blames the file, not the server, when no table was declared", () => {
+    // El cuerpo es perfectamente válido: el que no trae tablas es el archivo.
+    // El mensaje genérico de respuesta inesperada mandaría al usuario a
+    // buscar una falla del servicio que no existe.
     const body = { ...validBody(), tables: [] }
+    const result = parseSchemaResponse(body)
 
-    expect(parseSchemaResponse(body).ok).toBe(false)
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.message).toBe(
+        "El archivo se leyó, pero no declara ninguna tabla. Revisá que incluya sus CREATE TABLE.",
+      )
+    }
   })
 
   it("rejects a column definition missing its nullability", () => {
