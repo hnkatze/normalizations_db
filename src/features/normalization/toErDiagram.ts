@@ -12,7 +12,12 @@ import type { NormalizedSchema, NormalizedTable } from "@/domain"
  * escribirlo.
  */
 export function toErDiagram(schema: NormalizedSchema): string {
-  const lines = ["erDiagram"]
+  // De izquierda a derecha, no de arriba abajo. Apilado, el diagrama crece
+  // justo en el eje que escasea —el alto— y deja vacío el ancho, que es lo que
+  // sobra al lado del contenido. Además la lectura acompaña a la
+  // descomposición: las tablas de las que algo depende quedan a un lado y las
+  // que dependen de ellas al otro.
+  const lines = ["erDiagram", "  direction LR"]
 
   for (const table of schema.tables) {
     for (const foreignKey of table.foreignKeys) {

@@ -117,7 +117,7 @@ export function ErDiagram({ source, tableCount }: ErDiagramProps) {
           //
           // Si aun reescalado no entra a lo ancho, `overflow-x-auto` lo
           // desplaza en vez de encogerlo más: un dibujo ilegible no sirve.
-          className="overflow-x-auto [&_svg]:mx-auto [&_svg]:max-h-72 [&_svg]:w-auto"
+          className="overflow-x-auto [&_svg]:mx-auto [&_svg]:max-h-[26rem] [&_svg]:w-auto"
           dangerouslySetInnerHTML={{ __html: svg }}
         />
       )}
