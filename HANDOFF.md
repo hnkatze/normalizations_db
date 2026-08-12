@@ -84,10 +84,11 @@ en el mismo evento, y leer `parse.state` justo después daría el valor del rend
 curso. Reaccionar con un efecto sería sincronizar dos fuentes en vez de responder a un
 evento.
 
-**El archivo sin tablas se rechaza en el validador, no en la pantalla.** `parseSchemaResponse`
-devuelve `NO_TABLES_MESSAGE`. Antes caía en el mensaje genérico de cuerpo malformado, que
-mandaba a buscar una falla del servicio que no existía. Hay UNA sola redacción del
-problema; no volver a duplicarla en `describeParseStatus`.
+**El archivo sin tablas ya estaba resuelto en el servicio, no en el cliente.** Verificado
+contra el servicio corriendo: un `.sql` sin un solo `CREATE TABLE` vuelve como **422** con
+`kind: "no-tables-found"`, y `PARSE_ERROR_MESSAGES` ya traía ese texto. La comprobación de
+lista vacía en `parseSchemaResponse` es defensa en profundidad para un 200 que hoy nunca
+llega, y reutiliza ese mismo mensaje a propósito: hay UNA sola redacción del problema.
 
 | Ruta | Qué es |
 |---|---|
@@ -211,10 +212,17 @@ lo reclama cuando cambia el contador de Clear estando ya en `upload` (ahí el pa
 cambia y el contenedor no dispara). Dos autoridades sobre el foco se rompen de forma
 intermitente, que es la peor forma de romperse.
 
-**Para un destino de foco programático y no interactivo, `:focus`, nunca `:focus-visible`.**
-`:focus-visible` existe para suprimir el anillo en elementos que el usuario clickea; un
-encabezado con `tabindex="-1"` no se puede clickear-para-enfocar, así que esa supresión no
-compra nada y deja el pintado a la heurística del navegador.
+**Para un destino de foco programático, `:focus-visible`, nunca `:focus`.**
+`tabindex="-1"` significa "no alcanzable con Tab", **no** "no enfocable con click": un
+elemento así SÍ recibe foco al clickearlo. Con `:focus` a secas, cualquier click sobre el
+encabezado —o sobre `<main>`, que también lo lleva por el enlace de saltar al contenido—
+pinta el anillo aunque el usuario esté con el mouse.
+
+Esto se probó de las dos formas: primero se cambió a `:focus` siguiendo el argumento de que
+un elemento con `tabindex="-1"` no se puede clickear-para-enfocar. **Ese argumento es falso**
+y el resultado se vio en el navegador — anillo azul en cada click. `:focus-visible` es
+justamente la pseudo-clase que distingue teclado de puntero, que es la distinción que acá
+hace falta.
 
 ### Del parseo
 
