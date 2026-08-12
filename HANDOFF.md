@@ -102,22 +102,40 @@ llega, y reutiliza ese mismo mensaje a propósito: hay UNA sola redacción del p
 
 ## Lo que está pendiente y bloquea
 
-### 1. Nadie confirmó que Vercel sirva `api/*.py` en un proyecto Next.js (SIN RESOLVER)
+### 1. Vercel sí sirve `api/*.py` en un proyecto Next.js (RESUELTO)
 
-Las rutas no chocan y la documentación de Vercel describe funciones de Python en `api/`.
-Pero **no está probado en este proyecto**, y la documentación consultada no cubre el caso
-de mezclarlas con Next.js.
+**Confirmado en un preview deployment real.** Era la incógnita que bloqueaba producción
+desde el principio y ya no lo es: la función de Python convive con la aplicación Next.js
+en el mismo despliegue y responde en `/api/parse`.
 
-**Sigue siendo la incógnita que bloquea producción**, y ahora pesa más: la aplicación ya
-no tiene otro camino de lectura. La forma más barata de despejarla es integrar la rama a
-`development` y mirar el *preview deployment*.
+Lo que hizo falta para que funcionara:
 
-### 2. `/api/analyze` y `src/features/staging/` están muertos, pero siguen en pie
+| Pieza | Por qué |
+|---|---|
+| `api/` en la RAÍZ | No dentro de `app/`. Cada `.py` ahí se vuelve una función. |
+| `class handler(BaseHTTPRequestHandler)` | Uno de los tres puntos de entrada que Vercel reconoce. |
+| `requirements.txt` en la raíz | De ahí salen las dependencias. |
+| `framework: 'nextjs'` en `vercel.ts` | Sin el pin cae en el preset "Other" y tira rutas y funciones. |
+| UNA sola configuración | `vercel.ts` **y** `vercel.json` a la vez aborta el despliegue. |
 
-Ninguna pantalla los llama. Se dejaron a propósito como red hasta que el preview confirme
-lo de Python. **Cuando eso pase, se borran juntos**: la ruta, `analyzeContract.ts`,
-`parseAnalyzeResponse.ts` y toda la carpeta `staging/` — con lo que se va también la
-dependencia de PostgreSQL y `DATABASE_URL`.
+> **Trampa que sigue viva:** si alguien agrega FastAPI, Flask o Django a `requirements.txt`,
+> Vercel detecta un preset de framework Python y **las funciones de `/api` dejan de
+> existir** — esa aplicación pasa a atender todas las peticiones. Hoy no ocurre porque solo
+> está `sqlglot`.
+
+Queda una pregunta menor sin cerrar: si los módulos de `api/_sqlparse/` se convirtieron en
+funciones propias. La convención del guion bajo dice que no, pero la documentación no lo
+afirma. Se ve en la lista de funciones del despliegue.
+
+### 2. `/api/analyze` y `src/features/staging/` ya se pueden borrar
+
+Ninguna pantalla los llama, y la red de seguridad que justificaba dejarlos en pie
+—la duda sobre Python en Vercel— acaba de despejarse. **Se borran juntos**: la ruta,
+`analyzeContract.ts`, `parseAnalyzeResponse.ts` y toda la carpeta `staging/`, con lo que
+se van también la dependencia de PostgreSQL y `DATABASE_URL`.
+
+`StagingPort` era la abstracción equivocada para un parser, pero ya no hay que
+rediseñarla: hay que eliminarla.
 
 `StagingPort` era la abstracción equivocada para un parser, pero ya no hay que rediseñarla:
 no hay que reemplazarla por un puerto mejor, hay que eliminarla.
