@@ -105,18 +105,17 @@ export function ErDiagram({ source, tableCount }: ErDiagramProps) {
           // relaciones— está en las tarjetas de abajo, en texto. El pie
           // describe qué se está mostrando.
           aria-hidden="true"
-          // El alto manda y el ancho lo sigue. Mermaid calcula un tamaño en
-          // píxeles que para seis tablas ocupa media pantalla; topando el
-          // alto, el `viewBox` reescala el dibujo entero manteniendo la
-          // proporción, y queda una figura compacta al lado del contenido.
+          // Con `direction LR` el diagrama crece a lo ANCHO al sumar tablas,
+          // así que el desplazamiento horizontal es el mecanismo previsto, no
+          // un último recurso: un esquema de doce tablas se recorre, no se
+          // encoge. Achicarlo hasta que entre deja los nombres de columna
+          // ilegibles, y un dibujo que no se puede leer no sirve de nada.
           //
-          // Ambas clases hacen falta. Mermaid fija el alto como atributo de
-          // presentación —que cualquier regla CSS supera— y el ancho en el
-          // 100% de su modo `useMaxWidth`; sin `w-auto` ese 100% se queda y el
-          // tope de alto solo deformaría el dibujo en vez de reescalarlo.
-          //
-          // Si aun reescalado no entra a lo ancho, `overflow-x-auto` lo
-          // desplaza en vez de encogerlo más: un dibujo ilegible no sirve.
+          // El tope de alto queda igual, para el eje que sí puede
+          // descontrolarse: una cadena de dependencias larga apila niveles.
+          // `w-auto` lo acompaña porque Mermaid deja el ancho en el 100% de su
+          // modo `useMaxWidth`, y sin soltarlo el tope de alto deformaría el
+          // dibujo en vez de reescalarlo.
           className="overflow-x-auto [&_svg]:mx-auto [&_svg]:max-h-[26rem] [&_svg]:w-auto"
           dangerouslySetInnerHTML={{ __html: svg }}
         />

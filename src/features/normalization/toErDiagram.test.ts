@@ -37,6 +37,13 @@ describe("toErDiagram", () => {
     expect(toErDiagram(schema).startsWith("erDiagram")).toBe(true)
   })
 
+  it("lays the diagram out left to right, right after the header", () => {
+    // La dirección es parte del texto del diagrama, no del componente que lo
+    // dibuja. Sin esta prueba, perderla o escribirla mal solo se notaría
+    // mirando la pantalla.
+    expect(toErDiagram(schema)).toContain("erDiagram\n  direction LR")
+  })
+
   it("declares every table with its columns", () => {
     const diagram = toErDiagram(schema)
 

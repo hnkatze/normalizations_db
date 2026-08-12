@@ -111,6 +111,10 @@ for (const step of ["2FN", "3FN"]) {
   const tables = await page.locator('[data-slot="card-title"]').allTextContents()
   const svgs = await page.locator("figure svg").count()
   log(`${step}: ${tables.length} tarjetas -> ${tables.join(", ")} | diagramas svg: ${svgs}`)
+  // Contar y solo imprimir deja pasar el caso peor: una etapa que no dibujó
+  // NADA se lee igual que una que salió bien.
+  if (tables.length === 0) problems.push(`${step} no mostró ninguna tabla`)
+  if (svgs === 0) problems.push(`${step} no dibujó el diagrama`)
 }
 
 // 6. Desbordes horizontales, que es lo que no puedo ver de otra forma.
@@ -124,3 +128,10 @@ log(problems.length === 0 ? "sin errores de consola" : `PROBLEMAS: ${problems.le
 problems.forEach((p) => log(" -", p))
 
 await browser.close()
+
+// Salir con error cuando algo falló. Sin esto el proceso termina en 0 pase lo
+// que pase, y un verificador que siempre dice que sí es peor que ninguno:
+// convierte un fallo en una línea de consola que nadie mira.
+if (problems.length > 0) {
+  process.exitCode = 1
+}
