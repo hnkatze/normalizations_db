@@ -57,8 +57,10 @@ export function NormalizedTableCard({ table, sourceRows }: NormalizedTableCardPr
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        <div className="overflow-x-auto">
-          <Table>
+        {/* Sin envoltorio propio de scroll: `Table` ya trae su
+            `table-container` con `overflow-x-auto`, y anidar dos contenedores
+            desplazables deja al usuario adivinando cuál mover. */}
+        <Table>
             <TableCaption>
               {rows.length === sourceRows.length ? (
                 <>
@@ -107,8 +109,7 @@ export function NormalizedTableCard({ table, sourceRows }: NormalizedTableCardPr
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
-        </div>
+        </Table>
 
         {rows.length > preview.length ? (
           <p className="text-xs text-muted-foreground">

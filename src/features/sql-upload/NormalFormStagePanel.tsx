@@ -96,7 +96,17 @@ export function NormalFormStagePanel({
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      {/*
+        `auto-fit`, no `md:grid-cols-2` fijo: cuando la descomposición deja UNA
+        sola tabla, dos pistas fijas la dejaban en la mitad izquierda con la
+        derecha vacía. `auto-fit` colapsa las pistas que sobran y la tarjeta se
+        estira hasta el ancho completo; con dos o más vuelve a repartir.
+
+        El mínimo de 30rem es alto a propósito: estas tarjetas llevan una tabla
+        de datos adentro, y por debajo de eso las columnas quedan tan angostas
+        que todo se lee por scroll horizontal.
+      */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(30rem,100%),1fr))] gap-4">
         {stage.schema.tables.map((table) => (
           <NormalizedTableCard key={table.name} table={table} sourceRows={sourceRows} />
         ))}
