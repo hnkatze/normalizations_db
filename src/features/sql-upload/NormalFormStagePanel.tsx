@@ -1,5 +1,8 @@
 import { Badge } from "@/components/ui/badge"
 import type { NormalForm, Row } from "@/domain"
+import { toErDiagram } from "@/features/normalization"
+
+import { ErDiagram } from "./ErDiagram"
 import { NormalizedTableCard } from "./NormalizedTableCard"
 import type { NormalizationStageView } from "./normalizationOutcome"
 import { diffStages } from "./stageDiff"
@@ -95,6 +98,11 @@ export function NormalFormStagePanel({
           )}
         </div>
       )}
+
+      {/* El dibujo va ANTES de las tarjetas: primero la forma del esquema
+          completo, después el detalle de cada tabla. Al revés obliga a
+          reconstruir el conjunto de memoria mientras se leen las partes. */}
+      <ErDiagram source={toErDiagram(stage.schema)} tableCount={stage.schema.tables.length} />
 
       {/*
         `auto-fit`, no `md:grid-cols-2` fijo: cuando la descomposición deja UNA
