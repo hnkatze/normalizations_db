@@ -126,8 +126,14 @@ export function ParsedTableDetail({ table }: ParsedTableDetailProps) {
                 // que la posición ES su identidad estable aquí.
                 <TableRow key={index}>
                   {described.columns.map((column) => (
-                    <TableCell key={column.name} className="max-w-56 truncate text-xs">
-                      <CellText value={row[column.name] ?? null} />
+                    // El tope de ancho va en un hijo de bloque y no en la
+                    // celda: con `table-layout: auto` el ancho de columna lo
+                    // decide el contenido y un `max-width` sobre el `<td>` se
+                    // ignora, así que el recorte nunca llegaba a ocurrir.
+                    <TableCell key={column.name} className="text-xs">
+                      <span className="block max-w-56 truncate">
+                        <CellText value={row[column.name] ?? null} />
+                      </span>
                     </TableCell>
                   ))}
                 </TableRow>

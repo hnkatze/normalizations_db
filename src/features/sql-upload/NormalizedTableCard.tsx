@@ -102,8 +102,18 @@ export function NormalizedTableCard({ table, sourceRows }: NormalizedTableCardPr
                 // deduplicadas y en orden fijo, y no se reordenan ni se editan.
                 <TableRow key={index}>
                   {table.columns.map((column) => (
+                    // El tope de ancho va en un hijo de bloque, NO en la celda.
+                    // La tabla usa `table-layout: auto`, donde el ancho de
+                    // columna lo decide el contenido y un `max-width` sobre el
+                    // propio `<td>` se ignora; encima las celdas de shadcn
+                    // traen `whitespace-nowrap`, así que el texto no tiene
+                    // dónde cortarse y la columna crece hasta donde haga falta.
+                    // El `max-width` de un hijo de bloque sí entra en ese
+                    // cálculo, y ahí el recorte funciona.
                     <TableCell key={column.name} className="font-mono text-xs">
-                      <CellText value={row[column.name] ?? null} />
+                      <span className="block max-w-44 truncate">
+                        <CellText value={row[column.name] ?? null} />
+                      </span>
                     </TableCell>
                   ))}
                 </TableRow>
