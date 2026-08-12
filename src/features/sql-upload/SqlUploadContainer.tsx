@@ -72,7 +72,13 @@ export function SqlUploadContainer() {
     [analyzedTable],
   )
 
-  const confirmedDependencies = confirmedDependenciesOf(schemaReview.reviewed)
+  // Memoizado por IDENTIDAD, no por costo: este arreglo entra en las
+  // dependencias del `outcome` de abajo, así que recrearlo en cada renderizado
+  // invalidaría ese memo siempre y lo volvería decorativo.
+  const confirmedDependencies = useMemo(
+    () => confirmedDependenciesOf(schemaReview.reviewed),
+    [schemaReview.reviewed],
+  )
   const availability: StepAvailability = {
     // Un estado `ok` siempre trae al menos una tabla: `parseSchemaResponse`
     // rechaza antes el archivo que no declara ninguna. Volver a comprobarlo acá
@@ -81,6 +87,23 @@ export function SqlUploadContainer() {
     hasSelectedTable: analysis !== null,
     isSchemaReady: schemaReview.primaryKey.length > 0 && confirmedDependencies.length > 0,
   }
+  // Las tres etapas y su DDL se derivan una vez por cambio real, no en cada
+  // renderizado. Estaba calculado en línea dentro del JSX, así que marcar una
+  // casilla rehacía la descomposición completa —y, aguas abajo, obligaba a
+  // reproyectar todas las filas de cada tabla resultante, porque cada tabla
+  // llegaba como una referencia nueva.
+  const outcome = useMemo(
+    () =>
+      analysis === null
+        ? null
+        : computeNormalizationOutcome({
+            table: { ...analysis.table, rows: [] },
+            primaryKey: schemaReview.primaryKey,
+            confirmedDependencies,
+          }),
+    [analysis, schemaReview.primaryKey, confirmedDependencies],
+  )
+
   // El paso EFECTIVO, no el pedido: desmarcar la última regla estando en 3FN
   // cierra ese paso, y quedarse parado en él mostraría una pantalla rota.
   const step = resolveStep(requestedStep, availability)
@@ -282,18 +305,18 @@ export function SqlUploadContainer() {
           </div>
         ) : null}
 
-        {(step === "2NF" || step === "3NF") && analysis !== null ? (
+        {(step === "2NF" || step === "3NF") && analysis !== null && outcome !== null ? (
           <NormalizedSchemaSection
             originalTableName={analysis.table.name}
             originalColumnCount={analysis.table.columns.length}
             confirmedDependencyCount={confirmedDependencies.length}
             primaryKeyColumnCount={schemaReview.primaryKey.length}
             normalForm={step}
-            outcome={computeNormalizationOutcome({
-              table: { ...analysis.table, rows: [] },
-              primaryKey: schemaReview.primaryKey,
-              confirmedDependencies,
-            })}
+            // Las filas van por separado y no dentro del input del motor: el
+            // esquema se decide solo con columnas y dependencias, así que
+            // pasárselas ahí sería trabajo que nadie mira.
+            sourceRows={analysis.table.rows}
+            outcome={outcome}
           />
         ) : null}
       </div>

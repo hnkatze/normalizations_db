@@ -1,11 +1,13 @@
 import { Badge } from "@/components/ui/badge"
-import type { NormalForm } from "@/domain"
+import type { NormalForm, Row } from "@/domain"
 import { NormalizedTableCard } from "./NormalizedTableCard"
 import type { NormalizationStageView } from "./normalizationOutcome"
 import { diffStages } from "./stageDiff"
 
 type NormalFormStagePanelProps = {
   readonly stage: NormalizationStageView
+  /** Filas de la tabla original: cada tabla resultante proyecta las suyas de acá. */
+  readonly sourceRows: readonly Row[]
   /** La etapa inmediatamente anterior, o `null` si esta es la primera. */
   readonly previousStage: NormalizationStageView | null
   readonly originalTableName: string
@@ -25,6 +27,7 @@ type NormalFormStagePanelProps = {
  */
 export function NormalFormStagePanel({
   stage,
+  sourceRows,
   previousStage,
   originalTableName,
   primaryKeyColumnCount,
@@ -95,7 +98,7 @@ export function NormalFormStagePanel({
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {stage.schema.tables.map((table) => (
-          <NormalizedTableCard key={table.name} table={table} />
+          <NormalizedTableCard key={table.name} table={table} sourceRows={sourceRows} />
         ))}
       </div>
 

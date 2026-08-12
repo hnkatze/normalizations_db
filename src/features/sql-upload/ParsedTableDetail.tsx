@@ -8,8 +8,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import type { CellValue, ParsedTable } from "@/domain"
+import type { ParsedTable } from "@/domain"
 
+import { CellText } from "./CellText"
 import { describeParsedTable } from "./describeParsedTable"
 
 /** Cuántas filas se muestran como muestra. El resto se resume en el pie. */
@@ -142,18 +143,4 @@ export function ParsedTableDetail({ table }: ParsedTableDetailProps) {
       )}
     </div>
   )
-}
-
-/** Un valor de celda, distinguiendo el nulo del texto vacío. */
-function CellText({ value }: { readonly value: CellValue }) {
-  if (value === null) {
-    return <span className="text-muted-foreground italic">NULL</span>
-  }
-  if (typeof value === "boolean") {
-    return <span className="font-mono">{value ? "true" : "false"}</span>
-  }
-  if (value === "") {
-    return <span className="text-muted-foreground italic">vacío</span>
-  }
-  return <span className="font-mono">{String(value)}</span>
 }

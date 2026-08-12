@@ -5,7 +5,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import type { NormalForm } from "@/domain"
+import type { NormalForm, Row } from "@/domain"
 import { NormalFormStagePanel } from "./NormalFormStagePanel"
 import type { NormalizationOutcome, NormalizationStageView } from "./normalizationOutcome"
 import { summarizeSchema, type SchemaSummary } from "./schemaSummary"
@@ -19,6 +19,8 @@ type NormalizedSchemaSectionProps = {
   readonly primaryKeyColumnCount: number
   readonly normalForm: NormalForm
   readonly outcome: NormalizationOutcome
+  /** Filas de la tabla original, para poblar cada tabla resultante. */
+  readonly sourceRows: readonly Row[]
 }
 
 /**
@@ -30,6 +32,7 @@ type NormalizedSchemaSectionProps = {
  * etapa y nada más, que es lo que le devuelve el aire.
  */
 export function NormalizedSchemaSection({
+  sourceRows,
   originalTableName,
   originalColumnCount,
   confirmedDependencyCount,
@@ -79,6 +82,7 @@ export function NormalizedSchemaSection({
               previousStage={found?.previous ?? null}
               originalTableName={originalTableName}
               primaryKeyColumnCount={primaryKeyColumnCount}
+          sourceRows={sourceRows}
               ddlLabelId={DDL_LABEL_ID}
             />
 
