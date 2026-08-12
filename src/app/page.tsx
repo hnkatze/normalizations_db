@@ -1,10 +1,8 @@
-import { AppHeader } from "@/components/layout/AppHeader"
 import { SqlUploadContainer } from "@/features/sql-upload/SqlUploadContainer"
 
 export default function Home() {
   return (
-    <div className="flex flex-1 flex-col">
-      <AppHeader />
+    <>
       {/*
         tabIndex={-1} para que el enlace de saltar al contenido MUEVA el foco
         y no solo desplace la ventana: sin él, el siguiente Tab vuelve al
@@ -19,10 +17,10 @@ export default function Home() {
       <main
         id="main-content"
         tabIndex={-1}
-        className="mx-auto flex w-full max-w-7xl min-h-0 flex-1 flex-col gap-5 px-4 py-6 sm:px-6 sm:py-8"
+        className="mx-auto flex w-full max-w-7xl min-h-0 flex-1 flex-col gap-5 px-4 py-6 focus:outline-2 focus:outline-offset-4 focus:outline-ring sm:px-6 sm:py-8"
       >
         <SqlUploadContainer />
       </main>
-    </div>
+    </>
   )
 }
