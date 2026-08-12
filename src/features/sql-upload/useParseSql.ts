@@ -5,6 +5,7 @@ import { useState } from "react"
 import { PARSE_ENDPOINT } from "./parseContract"
 import { parseSchemaResponse } from "./parseSchemaResponse"
 import type { ParseState } from "./parseState"
+import { validateUploadSize } from "./validateUploadSize"
 
 export type ParseSql = {
   readonly state: ParseState
@@ -37,6 +38,14 @@ export function useParseSql(): ParseSql {
   }
 
   async function parseFile(file: File): Promise<ParseState> {
+    // Se mide ANTES de enviar. Por encima del límite de la plataforma la
+    // petición muere en el borde con un 413 que no trae ningún mensaje
+    // propio, así que subirla igual solo gasta la espera del usuario.
+    const tooBig = validateUploadSize(file.size)
+    if (tooBig !== null) {
+      return commit({ status: "error", message: tooBig })
+    }
+
     setState({ status: "parsing", fileName: file.name })
 
     let response: Response

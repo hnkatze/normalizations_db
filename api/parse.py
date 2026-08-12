@@ -19,10 +19,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _sqlparse import build_ir  # noqa: E402
 
-# Vercel rechaza los cuerpos que superan los 100 MB antes de llegar hasta aquí.
-# El límite propio es algo menor para poder responder con un error legible en
-# lugar de que la petición muera en el borde.
-MAX_BODY_BYTES = 90 * 1024 * 1024
+# Vercel corta el cuerpo en 4,5 MB y responde 413 EN EL BORDE: por encima de eso
+# la petición no llega hasta aquí, así que ningún mensaje escrito en este archivo
+# puede explicarla. Por eso el cliente mide el tamaño antes de enviar, en
+# `validateUploadSize.ts`, y este tope solo alcanza a quien llame a la función
+# sin pasar por la aplicación.
+MAX_BODY_BYTES = 4 * 1024 * 1024 + 512 * 1024
 
 
 class handler(BaseHTTPRequestHandler):
@@ -41,7 +43,7 @@ class handler(BaseHTTPRequestHandler):
             self._send_error(
                 413,
                 "file-too-large",
-                f"El archivo supera el límite de {MAX_BODY_BYTES // (1024 * 1024)} MB.",
+                f"El archivo supera el límite de {MAX_BODY_BYTES / (1024 * 1024):.1f} MB.",
             )
             return
 
