@@ -1,7 +1,8 @@
 # Handoff — estado del trabajo en curso
 
 Documento para retomar el trabajo en otra máquina o después de una pausa larga.
-Refleja el estado al **12 de agosto de 2026**.
+Refleja el estado al **12 de agosto de 2026**, después de la tanda que dejó el
+recorrido funcionando de punta a punta y verificado en navegador.
 
 Rama de trabajo: `feature/normalization-workspace`. Va **16 commits adelante de
 `development` y sin divergencia**, así que entra con fast-forward.
@@ -64,6 +65,25 @@ sobre UNA relación**. `StepAvailability` pasó de `{ hasAnalysis, isSchemaReady
 > **No unir las tablas en una relación universal.** Un join fabrica tuplas espurias y
 > dependencias funcionales falsas que no existen en el dominio. Son N análisis
 > independientes más un grafo de claves foráneas para el informe global.
+
+### Lo que se agregó después del cableado
+
+**Cada tabla resultante muestra sus filas.** `NormalizedTable.sourceColumns` ya existía
+para poder emitir el `INSERT ... SELECT DISTINCT` de la migración;
+`projectTableRows` resuelve ese mismo SELECT en memoria para poder enseñarlo antes de
+escribir nada. El pie dice cuántas filas quedaron y cuántas eran repetición — ver que 56
+ventas dejan 5 clientes ES el argumento de la normalización, y hasta entonces había que
+creerlo.
+
+**El esquema se dibuja.** `toErDiagram` convierte el `NormalizedSchema` en texto de
+Mermaid y `ErDiagram` lo renderiza. La generación es una función pura, así que qué se
+dibuja se prueba sin navegador. Mermaid se importa dentro del efecto porque pesa cerca de
+un megabyte y solo hace falta en 2FN y 3FN.
+
+**El paso 3FN nombra las reglas que le faltan.** Antes decía "confirmá más reglas" con
+decenas pendientes, y eso hizo tropezar tres veces a la misma persona. Ahora lista las
+concretas cuyo determinante queda fuera de la clave, usando el MISMO canonicalizador que
+el motor para no ofrecer una regla que después no se use.
 
 ### Decisiones que conviene no deshacer sin leer esto
 
@@ -140,19 +160,20 @@ rediseñarla: hay que eliminarla.
 `StagingPort` era la abstracción equivocada para un parser, pero ya no hay que rediseñarla:
 no hay que reemplazarla por un puerto mejor, hay que eliminarla.
 
-### 3. Nada de esto se probó en un navegador (SIN VERIFICAR)
+### 3. El recorrido está verificado de punta a punta (RESUELTO)
 
-Lo verde son tipos, pruebas de funciones puras y build. **El recorrido de clics no se
-ejecutó nunca.** Falta confirmar a mano:
+`npm run walkthrough` lo comprueba solo, en un Chrome de verdad. Resultado con la semilla
+de referencia: **las seis tablas** de 3FN con los conteos exactos del answer key
+—56 / 8 / 10 / 5 / 3 / 4—, **0 px** de desborde horizontal y cero errores de consola.
 
-- subir → elegir tabla → 1FN → 2FN → 3FN de punta a punta;
-- que el anillo de foco se vea al cambiar de paso, y su contraste;
-- que volver atrás y elegir OTRA tabla reinicie la revisión sin arrastrar la clave anterior.
+Lo que sigue sin comprobarse automáticamente: el foco visible, el contraste real y el
+comportamiento con teclado. El script mira estructura y desborde, no percepción.
 
-### 4. La vista de carga y el scroll (SIN VERIFICAR, previo)
+### 4. La vista de carga y el scroll (parcialmente verificado)
 
-Se le quitaron unos 72px al liberar el encabezado, que es justo el sobrante que este
-documento describía antes. **No está confirmado que ahora entre sin scroll.**
+Se le quitaron unos 72px al liberar el encabezado. El recorrido reporta **0 px de
+desborde horizontal**, pero el scroll VERTICAL de la vista de carga no está medido: el
+script informa el del documento entero, que en 2FN y 3FN es largo por diseño.
 
 Si todavía sobra, el próximo paso es medir, no estimar. Con la app corriendo, en consola:
 
@@ -242,6 +263,25 @@ y el resultado se vio en el navegador — anillo azul en cada click. `:focus-vis
 justamente la pseudo-clase que distingue teclado de puntero, que es la distinción que acá
 hace falta.
 
+### De las pruebas y las herramientas
+
+**`vitest` NO typechequea.** Pasó tres veces en una tanda: las pruebas en verde mientras
+`tsc` reportaba errores de tipos. Correr `npx tsc --noEmit` aparte siempre, aunque el
+suite esté limpio.
+
+**Las pruebas usan `ventasRawFixture.ts`, escrito a mano, NO la salida del parser.** El
+servicio de Python no tiene pruebas propias, así que cualquier defecto de extracción de
+valores solo aparece ejecutándolo. Así se coló que las fechas llegaran como
+`CAST('2024-03-04' AS DATE)` en vez de la fecha.
+
+**Cuando una pantalla anticipa lo que hará el motor, tiene que llamar al motor.** La lista
+de reglas sugeridas clasificaba por su cuenta y podía ofrecer una que el motor luego
+descartaba, porque él canonicaliza los pares recíprocos antes de clasificar. Se extrajo
+`createCanonicalizer` para que no haya dos versiones de la misma regla.
+
+**Un `<ul>` con `display: flex` o `grid` pierde la semántica de lista en WebKit.** Se le
+devuelve con `role="list"` explícito. No es un rol redundante en ese caso.
+
 ### Del parseo
 
 **sqlglot solo no alcanza con la salida cruda de SSMS.** Sin sanear antes, degrada el
@@ -300,10 +340,14 @@ directorios vendorizados. Filtrar con `rg`, o correr el build en su propio coman
 
 ```bash
 npx tsc --noEmit     # limpio
-npx vitest run       # 31 archivos, 218 pruebas
+npx vitest run       # 247 pruebas
 npx eslint src       # limpio
 npx next build       # compila
+npm run walkthrough  # recorre la app en Chrome y deja capturas en .walkthrough/
 ```
+
+El recorrido necesita los otros dos procesos levantados. Sale distinto de cero si algo
+falla, así que sirve como comprobación y no solo como paseo.
 
 **`npx eslint api` falla**: eslint no tiene configuración para `.py`. Lintear solo `src`.
 
