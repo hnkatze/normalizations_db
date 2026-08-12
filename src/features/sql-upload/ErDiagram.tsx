@@ -96,7 +96,7 @@ export function ErDiagram({ source, tableCount }: ErDiagramProps) {
   const svg = current?.svg ?? null
 
   return (
-    <figure className="m-0 flex flex-col gap-2 rounded-md border border-border bg-card p-3">
+    <figure className="flex flex-col gap-2 rounded-md border border-border bg-card p-3">
       {svg === null ? (
         <p className="text-xs text-muted-foreground">Dibujando el esquema…</p>
       ) : (
@@ -110,7 +110,18 @@ export function ErDiagram({ source, tableCount }: ErDiagramProps) {
           // relaciones— está en las tarjetas de abajo, en texto. El pie
           // describe qué se está mostrando.
           aria-hidden="true"
-          className="overflow-x-auto [&_svg]:mx-auto [&_svg]:h-auto [&_svg]:max-w-full"
+          // Desborda y se desplaza, en vez de encogerse hasta entrar. Un
+          // diagrama de seis tablas achicado a un teléfono deja los nombres de
+          // columna ilegibles, y un dibujo que no se puede leer no sirve de
+          // nada: es preferible recorrerlo. Sin `max-w-full` el SVG conserva
+          // el ancho que calculó Mermaid y `overflow-x-auto` recién ahí tiene
+          // algo que hacer; con las dos clases juntas, el scroll no se
+          // activaba nunca.
+          //
+          // `h-auto` sí hace falta: Mermaid fija `width`/`height` como
+          // atributos de presentación, que cualquier regla CSS supera, y sin
+          // esto la altura en píxeles quedaría clavada.
+          className="overflow-x-auto [&_svg]:mx-auto [&_svg]:h-auto"
           dangerouslySetInnerHTML={{ __html: svg }}
         />
       )}
