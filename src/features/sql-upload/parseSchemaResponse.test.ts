@@ -80,18 +80,17 @@ describe("parseSchemaResponse", () => {
     expect(parseSchemaResponse(body).ok).toBe(false)
   })
 
-  it("blames the file, not the server, when no table was declared", () => {
-    // El cuerpo es perfectamente válido: el que no trae tablas es el archivo.
-    // El mensaje genérico de respuesta inesperada mandaría al usuario a
-    // buscar una falla del servicio que no existe.
+  it("reuses the no-tables wording instead of inventing a second one", () => {
+    // Camino defensivo: el servicio real devuelve 422 con
+    // `kind: "no-tables-found"` para este archivo, no un 200 con la lista
+    // vacía. Si algún día lo hiciera, el usuario tiene que leer exactamente
+    // el mismo texto que ya redacta `messageForError`.
     const body = { ...validBody(), tables: [] }
     const result = parseSchemaResponse(body)
 
     expect(result.ok).toBe(false)
     if (!result.ok) {
-      expect(result.message).toBe(
-        "El archivo se leyó, pero no declara ninguna tabla. Revisá que incluya sus CREATE TABLE.",
-      )
+      expect(result.message).toBe("El archivo se leyó, pero no declara ninguna tabla.")
     }
   })
 

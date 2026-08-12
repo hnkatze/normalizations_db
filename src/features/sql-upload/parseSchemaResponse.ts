@@ -16,16 +16,6 @@ const DIALECTS: readonly string[] = ["tsql", "mysql", "oracle", "postgres"]
 const FALLBACK_MESSAGE = "El servidor devolvió una respuesta inesperada."
 
 /**
- * Un archivo leído sin un solo `CREATE TABLE`.
- *
- * Es la única condición en que el servicio responde bien y aun así no hay nada
- * que normalizar, así que se distingue del cuerpo malformado: el usuario tiene
- * que saber que el problema está en lo que subió.
- */
-const NO_TABLES_MESSAGE =
-  "El archivo se leyó, pero no declara ninguna tabla. Revisá que incluya sus CREATE TABLE."
-
-/**
  * Reduce el cuerpo `unknown` de `POST /api/parse` a `ParseSqlResponse`.
  *
  * La respuesta cruzó un límite de red Y un límite de lenguaje: la produce un
@@ -44,10 +34,14 @@ export function parseSchemaResponse(value: unknown): ParseSqlResponse {
 
   if (isParsedDatabase(value)) {
     if (value.tables.length === 0) {
-      // La respuesta es válida; el que no trae tablas es el archivo. Tratarlo
-      // como un cuerpo malformado culparía al servicio de lectura y mandaría
-      // al usuario a buscar una falla donde no está.
-      return { ok: false, message: NO_TABLES_MESSAGE }
+      // Defensa en profundidad, no el camino normal: verificado contra el
+      // servicio, un archivo sin `CREATE TABLE` vuelve como 422 con
+      // `kind: "no-tables-found"` y lo redacta `messageForError`. Esto solo
+      // cubre que el servicio algún día responda 200 con la lista vacía.
+      //
+      // Reutiliza ese mismo texto a propósito: dos redacciones del mismo
+      // problema es justo lo que se quiso evitar.
+      return { ok: false, message: PARSE_ERROR_MESSAGES["no-tables-found"] ?? FALLBACK_MESSAGE }
     }
     return { ok: true, database: value }
   }
