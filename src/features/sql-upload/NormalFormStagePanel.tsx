@@ -88,7 +88,11 @@ export function NormalFormStagePanel({
                     clave, así que {pendingTransitive.length === 1 ? "es la que" : "son las que"}{" "}
                     esta etapa usaría:
                   </p>
-                  <ul className="flex flex-col gap-0.5">
+                  {/* `role="list"`: darle `display: flex` a un `<ul>` le quita
+                      la semántica de lista en WebKit y VoiceOver deja de decir
+                      cuántos elementos hay. Mismo arreglo que en
+                      ParsedTableDetail. */}
+                  <ul role="list" className="flex flex-col gap-0.5">
                     {pendingTransitive.slice(0, PENDING_SHOWN).map((rule) => (
                       <li
                         key={`${rule.determinant.join("+")}->${rule.dependent}`}
@@ -122,6 +126,7 @@ export function NormalFormStagePanel({
                   */}
                   <span id={newTablesLabelId}>Nuevas acá:</span>
                   <ul
+                    role="list"
                     aria-labelledby={newTablesLabelId}
                     className="mt-1 flex list-none flex-wrap items-center gap-1.5 p-0"
                   >

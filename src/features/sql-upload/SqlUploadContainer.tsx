@@ -76,6 +76,21 @@ export function SqlUploadContainer() {
   // Memoizado por IDENTIDAD, no por costo: este arreglo entra en las
   // dependencias del `outcome` de abajo, así que recrearlo en cada renderizado
   // invalidaría ese memo siempre y lo volvería decorativo.
+  // Memoizado por consistencia con sus vecinos: hoy solo se calcula al entrar
+  // en 2FN o 3FN, pero dejarlo suelto invita a que un cambio futuro lo empiece
+  // a recalcular en cada casilla marcada sin que nadie lo note.
+  const pendingTransitive = useMemo(
+    () =>
+      analysis === null
+        ? []
+        : pendingTransitiveRules(
+            schemaReview.reviewed,
+            schemaReview.primaryKey,
+            analysis.table.columns.map((column) => column.name),
+          ),
+    [analysis, schemaReview.reviewed, schemaReview.primaryKey],
+  )
+
   const confirmedDependencies = useMemo(
     () => confirmedDependenciesOf(schemaReview.reviewed),
     [schemaReview.reviewed],
@@ -317,7 +332,7 @@ export function SqlUploadContainer() {
             // esquema se decide solo con columnas y dependencias, así que
             // pasárselas ahí sería trabajo que nadie mira.
             sourceRows={analysis.table.rows}
-            pendingTransitive={pendingTransitiveRules(schemaReview.reviewed, schemaReview.primaryKey)}
+            pendingTransitive={pendingTransitive}
             outcome={outcome}
           />
         ) : null}

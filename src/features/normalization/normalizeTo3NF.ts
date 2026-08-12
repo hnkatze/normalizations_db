@@ -123,6 +123,45 @@ function createColumnUnionFind(columns: readonly ColumnName[]): {
  * único para la misma entidad), y es exactamente lo que un detector de poda por dependiente
  * puede emitir para ambas direcciones del mismo par.
  */
+/**
+ * Cómo se resuelve una columna cuando pertenece a un par de claves alternativas.
+ *
+ * Los determinantes recíprocos de una sola columna (`{A}->B` y `{B}->A` ambos
+ * confirmados) son claves alternativas de la misma entidad y deben resolverse al
+ * mismo determinante. El representante es el miembro declarado primero en la
+ * tabla de origen, de modo que la elección es determinista e independiente del
+ * orden propio del arreglo de dependencias confirmadas.
+ *
+ * Se aplica únicamente a determinantes: un dependiente que resulta ser la mitad
+ * perdedora de un par recíproco en otro lugar conserva su propia identidad como
+ * dependiente.
+ *
+ * Está exportada porque la pantalla necesita anticipar QUÉ hará esta
+ * clasificación antes de que el usuario confirme nada, y replicarla allá sería
+ * dejar dos versiones de la misma regla libres de divergir en silencio.
+ */
+export function createCanonicalizer(
+  allColumns: readonly ColumnName[],
+  confirmedDependencies: readonly FunctionalDependency[],
+): (column: ColumnName) => ColumnName {
+  const columnUnionFind = createColumnUnionFind(allColumns)
+  for (const [columnA, columnB] of findReciprocalPairs(confirmedDependencies)) {
+    columnUnionFind.union(columnA, columnB)
+  }
+  const representativeByRoot = new Map<ColumnName, ColumnName>()
+  for (const column of allColumns) {
+    const root = columnUnionFind.find(column)
+    if (!representativeByRoot.has(root)) {
+      representativeByRoot.set(root, column)
+    }
+  }
+
+  return (column) => {
+    const root = columnUnionFind.find(column)
+    return representativeByRoot.get(root) ?? column
+  }
+}
+
 function findReciprocalPairs(
   dependencies: readonly FunctionalDependency[],
 ): readonly (readonly [ColumnName, ColumnName])[] {
@@ -216,30 +255,7 @@ function runNormalizationStages(input: NormalizationInput): NormalizationStages 
   // mismo determinante. El representante es el miembro declarado primero en la
   // tabla de origen, de modo que la elección es determinista e independiente del
   // orden propio del arreglo de dependencias confirmadas.
-  const columnUnionFind = createColumnUnionFind(allColumns)
-  for (const [columnA, columnB] of findReciprocalPairs(confirmedDependencies)) {
-    columnUnionFind.union(columnA, columnB)
-  }
-  const representativeByRoot = new Map<ColumnName, ColumnName>()
-  for (const column of allColumns) {
-    const root = columnUnionFind.find(column)
-    if (!representativeByRoot.has(root)) {
-      representativeByRoot.set(root, column)
-    }
-  }
-
-  /**
-   * Mapea una columna al representante de su clase de equivalencia recíproca, o
-   * la devuelve sin cambios cuando no pertenece a ninguna de esas clases. Se aplica
-   * únicamente a determinantes: un dependiente que resulta ser la mitad perdedora de un
-   * par recíproco en otro lugar conserva su propia identidad como dependiente, así que
-   * esta corrección permanece acotada al defecto reportado (determinación mutua sin
-   * ninguna columna no relacionada que apunte a ninguno de los dos lados).
-   */
-  function canonicalColumn(column: ColumnName): ColumnName {
-    const root = columnUnionFind.find(column)
-    return representativeByRoot.get(root) ?? column
-  }
+  const canonicalColumn = createCanonicalizer(allColumns, confirmedDependencies)
 
   function classify(dependency: FunctionalDependency): DeterminantClassification {
     const determinant = orderColumns([...new Set(dependency.determinant.map(canonicalColumn))])
