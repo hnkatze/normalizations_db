@@ -52,23 +52,18 @@ export function ErDiagram({ source, tableCount }: ErDiagramProps) {
           // Los nombres de tabla salen de un archivo ajeno. `strict` hace que
           // Mermaid escape el HTML que pueda venir dentro de una etiqueta.
           securityLevel: "strict",
-          theme: "base",
-          // Los colores salen de los tokens del proyecto para que el diagrama
-          // no traiga su propia paleta y desentone con el resto.
-          themeVariables: {
-            fontFamily: "var(--font-sans)",
-            primaryColor: "var(--card)",
-            primaryTextColor: "var(--foreground)",
-            primaryBorderColor: "var(--border)",
-            lineColor: "var(--muted-foreground)",
-            textColor: "var(--foreground)",
-          },
+          theme: "neutral",
         })
         const { svg } = await mermaid.render(renderId, source)
         if (!cancelled) {
           setDrawn({ source, svg })
         }
-      } catch {
+      } catch (error) {
+        // Se reporta en vez de tragarse: Mermaid falla el diagrama entero por
+        // una sola línea inválida, y sin este mensaje el síntoma es una
+        // pantalla sin dibujo y sin ninguna pista de por qué.
+        console.error("[ErDiagram] Mermaid no pudo dibujar el esquema:", error)
+        console.error("[ErDiagram] texto que recibió:\n" + source)
         if (!cancelled) {
           setDrawn({ source, svg: null })
         }
