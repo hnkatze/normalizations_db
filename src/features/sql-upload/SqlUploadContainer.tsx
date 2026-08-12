@@ -214,7 +214,7 @@ export function SqlUploadContainer() {
         tabIndex={-1}
         className={cn(
           "font-heading text-lg font-semibold tracking-tight text-foreground",
-          "focus:outline-2 focus:outline-offset-4 focus:outline-ring",
+          "focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring",
           step === "upload" && "sr-only"
         )}
       >

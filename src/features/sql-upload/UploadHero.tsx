@@ -261,7 +261,7 @@ export function UploadHero({
             tabIndex={-1}
             className={cn(
               ENTRANCE_ANIMATION,
-              "focus:outline-2 focus:outline-offset-4 focus:outline-ring",
+              "focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring",
               // Un solo `clamp` en lugar de seis clases encadenando `short:`
               // con `sm:` y `lg:`. Va en `vmin` y no en `vw` a propósito: así
               // el título también achica en una ventana ancha pero baja, que
