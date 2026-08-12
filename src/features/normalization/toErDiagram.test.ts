@@ -77,6 +77,37 @@ describe("toErDiagram", () => {
     expect(toErDiagram(alone)).not.toContain("||--o{")
   })
 
+  it("strips a quote hiding inside a sql type", () => {
+    // El tipo llega textual del archivo y se escribe SIN comillas alrededor,
+    // así que una comilla suya abre un literal que nadie cierra y tumba el
+    // diagrama entero. Sus hermanas ya la quitaban; esta no.
+    const conComilla: NormalizedSchema = {
+      normalForm: "1NF",
+      tables: [
+        {
+          ...schema.tables[0]!,
+          columns: [{ name: "raro", sqlType: 'wei"rd', nullable: true }],
+        },
+      ],
+    }
+
+    expect(toErDiagram(conComilla)).not.toContain('"rd raro')
+    expect(toErDiagram(conComilla)).toContain("wei_rd raro")
+  })
+
+  it("folds a newline hidden in a table name", () => {
+    // `trim` solo limpia los extremos: un salto INTERNO parte la sentencia en
+    // dos líneas y mermaid lee la segunda mitad como basura.
+    const conSalto: NormalizedSchema = {
+      normalForm: "1NF",
+      tables: [{ ...schema.tables[0]!, name: "ventas\nraras" }],
+    }
+    const diagram = toErDiagram(conSalto)
+
+    expect(diagram).toContain('"ventas raras"')
+    expect(diagram.split("\n").filter((line) => line.includes("raras"))).toHaveLength(1)
+  })
+
   it("survives a table name that would break the syntax", () => {
     const odd: NormalizedSchema = {
       normalForm: "1NF",

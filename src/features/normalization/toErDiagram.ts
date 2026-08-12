@@ -51,9 +51,14 @@ function keyOf(table: NormalizedTable, column: string): string {
   return isForeign ? " FK" : ""
 }
 
-/** Los espacios parten el atributo en dos, así que `character varying` viaja unido. */
+/**
+ * Los espacios parten el atributo en dos, así que `character varying` viaja
+ * unido. Las comillas se van por la misma razón que en el resto del módulo: el
+ * tipo se escribe SIN comillas alrededor, así que una suya abriría un literal
+ * que nadie cierra y se llevaría puesto el diagrama entero.
+ */
 function sqlType(value: string): string {
-  return value.trim().replace(/\s+/g, "_") || "desconocido"
+  return value.replace(/["\s]+/g, "_").replace(/^_+|_+$/g, "") || "desconocido"
 }
 
 /** Un identificador de Mermaid no admite espacios ni comillas. */
@@ -61,7 +66,13 @@ function identifier(value: string): string {
   return value.replace(/["\s]+/g, "_") || "sin_nombre"
 }
 
-/** Un nombre entre comillas admite espacios, pero no las comillas mismas. */
+/**
+ * Un nombre entre comillas admite espacios, pero no las comillas mismas.
+ *
+ * Los espacios internos se colapsan a uno solo, y eso incluye los saltos de
+ * línea: `trim` únicamente limpia los extremos, así que un salto en el medio
+ * partiría la sentencia en dos y Mermaid leería la segunda mitad como basura.
+ */
 function quoted(value: string): string {
-  return `"${value.replace(/"/g, "").trim()}"`
+  return `"${value.replace(/"/g, "").replace(/\s+/g, " ").trim()}"`
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useId, useState } from "react"
+import { useEffect, useId, useRef, useState } from "react"
 
 type ErDiagramProps = {
   /** Texto en sintaxis `erDiagram` de Mermaid, ya saneado por `toErDiagram`. */
@@ -32,9 +32,17 @@ export function ErDiagram({ source, tableCount }: ErDiagramProps) {
   // en `useId` no son válidos en un selector de CSS.
   const diagramId = `er-${reactId.replace(/:/g, "")}`
   const [drawn, setDrawn] = useState<Drawn | null>(null)
+  // Un id distinto por intento. Cancelar solo evita el `setDrawn` tardío: la
+  // llamada anterior a Mermaid sigue viva y trabajando sobre el DOM, así que
+  // dos dibujos superpuestos compartiendo id se pisan entre sí. Pasa al
+  // cambiar de paso rápido y en el doble montaje de StrictMode, que reutiliza
+  // el mismo `useId`.
+  const attempt = useRef(0)
 
   useEffect(() => {
     let cancelled = false
+    attempt.current += 1
+    const renderId = `${diagramId}-${attempt.current}`
 
     async function draw() {
       try {
@@ -56,7 +64,7 @@ export function ErDiagram({ source, tableCount }: ErDiagramProps) {
             textColor: "var(--foreground)",
           },
         })
-        const { svg } = await mermaid.render(diagramId, source)
+        const { svg } = await mermaid.render(renderId, source)
         if (!cancelled) {
           setDrawn({ source, svg })
         }
