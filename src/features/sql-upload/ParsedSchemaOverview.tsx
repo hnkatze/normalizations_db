@@ -1,0 +1,137 @@
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import type { ParsedDatabase, SqlDialect } from "@/domain"
+
+import { describeParsedTable, resolveSelectedTable, totalRowCount } from "./describeParsedTable"
+import { ParsedTableDetail } from "./ParsedTableDetail"
+
+/** Cómo se llama cada dialecto fuera del código. */
+const DIALECT_LABELS: Readonly<Record<SqlDialect, string>> = {
+  tsql: "SQL Server",
+  mysql: "MySQL",
+  oracle: "Oracle",
+  postgres: "PostgreSQL",
+}
+
+type ParsedSchemaOverviewProps = {
+  readonly database: ParsedDatabase
+  readonly selectedTableName: string | null
+  readonly onSelectTable: (tableName: string) => void
+}
+
+/**
+ * Lo que el archivo resultó ser, antes de analizar nada.
+ *
+ * Existe porque un archivo puede declarar varias tablas y la normalización se
+ * aplica a UNA relación por vez. Elegir cuál es una decisión del usuario, y
+ * para tomarla necesita ver qué hay: cuántas tablas, con qué forma y con qué
+ * datos. Sin esta pantalla, esa elección se haría a ciegas o —peor— la tomaría
+ * la aplicación por su cuenta.
+ */
+export function ParsedSchemaOverview({
+  database,
+  selectedTableName,
+  onSelectTable,
+}: ParsedSchemaOverviewProps) {
+  const selected = resolveSelectedTable(database, selectedTableName)
+  const rowTotal = totalRowCount(database)
+  const hasChoice = database.tables.length > 1
+
+  return (
+    <Card>
+      <CardHeader className="gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <CardTitle className="text-base">
+            {database.tables.length}{" "}
+            {database.tables.length === 1 ? "tabla encontrada" : "tablas encontradas"}
+          </CardTitle>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge variant="secondary" className="font-normal">
+              {DIALECT_LABELS[database.dialect]}
+            </Badge>
+            <Badge variant="outline" className="font-mono font-normal">
+              {database.encoding}
+            </Badge>
+          </div>
+        </div>
+
+        <p className="text-sm text-muted-foreground">
+          {rowTotal} {rowTotal === 1 ? "fila leída" : "filas leídas"} en total.
+          {hasChoice ? " La normalización se aplica a una tabla por vez: elegí cuál." : null}
+        </p>
+      </CardHeader>
+
+      <CardContent className="flex flex-col gap-5">
+        {hasChoice ? (
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Tablas encontradas">
+            {database.tables.map((table) => {
+              const described = describeParsedTable(table)
+              const isSelected = selected?.name === table.name
+              return (
+                <Button
+                  key={table.name}
+                  type="button"
+                  variant={isSelected ? "default" : "outline"}
+                  size="sm"
+                  aria-pressed={isSelected}
+                  onClick={() => onSelectTable(table.name)}
+                  className="h-auto flex-col items-start gap-0.5 py-2"
+                >
+                  <span className="font-mono text-xs">{table.name}</span>
+                  <span className="text-[0.6875rem] font-normal opacity-80">
+                    {described.columns.length} col · {described.rowCount} filas
+                  </span>
+                </Button>
+              )
+            })}
+          </div>
+        ) : null}
+
+        {selected !== null ? (
+          <>
+            {hasChoice ? <Separator /> : null}
+            <ParsedTableDetail table={selected} />
+          </>
+        ) : null}
+
+        <ParseWarnings database={database} />
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * Lo que el lector no pudo interpretar.
+ *
+ * Se muestra en lugar de callarse porque un archivo leído a medias se ve igual
+ * que uno leído entero: sin este aviso, una tabla que falta parece una tabla
+ * que nunca estuvo.
+ */
+function ParseWarnings({ database }: { readonly database: ParsedDatabase }) {
+  const { unparsedStatements, orphanInserts } = database.diagnostics
+
+  if (unparsedStatements === 0 && orphanInserts.length === 0) {
+    return null
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 rounded-md border border-border bg-muted/40 px-3 py-2">
+      <p className="text-xs font-medium text-foreground">Se leyó el archivo con salvedades</p>
+      {unparsedStatements > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          {unparsedStatements}{" "}
+          {unparsedStatements === 1 ? "sentencia no se pudo" : "sentencias no se pudieron"}{" "}
+          interpretar y quedaron fuera.
+        </p>
+      ) : null}
+      {orphanInserts.length > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          Hay filas para {orphanInserts.join(", ")}, pero el archivo no declara esas tablas.
+        </p>
+      ) : null}
+    </div>
+  )
+}
