@@ -42,9 +42,16 @@ next-env.d.ts
 .agents
 .atl
 .claude
+.codegraph
 .kiro
 skills-lock.json
 context.md
+
+# python (parse service)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
 
 # Agent instruction files (kept locally, not published)
 CLAUDE.md
