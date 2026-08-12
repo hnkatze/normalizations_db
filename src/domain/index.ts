@@ -32,3 +32,11 @@ export type {
   NormalizedSchema,
   NormalizedTable,
 } from "./normalizedSchema"
+
+export type {
+  ParseDiagnostics,
+  ParsedDatabase,
+  ParsedTable,
+  SqlDialect,
+} from "./parsedSchema"
+export { toFlatTable } from "./parsedSchema"
