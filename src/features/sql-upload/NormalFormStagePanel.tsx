@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge"
-import type { NormalForm, Row } from "@/domain"
+import type { FunctionalDependency, NormalForm, Row } from "@/domain"
 import { toErDiagram } from "@/features/normalization"
 
 import { ErDiagram } from "./ErDiagram"
@@ -7,10 +7,20 @@ import { NormalizedTableCard } from "./NormalizedTableCard"
 import type { NormalizationStageView } from "./normalizationOutcome"
 import { diffStages } from "./stageDiff"
 
+/**
+ * Cuántas reglas pendientes se nombran antes de resumir el resto.
+ *
+ * Suficientes para que se vea el patrón —el determinante que se repite— sin
+ * convertir la explicación en otra lista larga de las que ya hay una.
+ */
+const PENDING_SHOWN = 6
+
 type NormalFormStagePanelProps = {
   readonly stage: NormalizationStageView
   /** Filas de la tabla original: cada tabla resultante proyecta las suyas de acá. */
   readonly sourceRows: readonly Row[]
+  /** Reglas sin decidir cuyo determinante queda fuera de la clave primaria. */
+  readonly pendingTransitive: readonly FunctionalDependency[]
   /** La etapa inmediatamente anterior, o `null` si esta es la primera. */
   readonly previousStage: NormalizationStageView | null
   readonly originalTableName: string
@@ -31,6 +41,7 @@ type NormalFormStagePanelProps = {
 export function NormalFormStagePanel({
   stage,
   sourceRows,
+  pendingTransitive,
   previousStage,
   originalTableName,
   primaryKeyColumnCount,
@@ -60,9 +71,44 @@ export function NormalFormStagePanel({
           </p>
 
           {changedNothing ? (
-            <p className="mt-1 text-sm text-muted-foreground">
-              {noChangeReason(stage.schema.normalForm, primaryKeyColumnCount)}
-            </p>
+            <>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {noChangeReason(stage.schema.normalForm, primaryKeyColumnCount)}
+              </p>
+              {/* Nombrar las reglas, no pedirlas. "Confirmá más reglas" con
+                  decenas pendientes no es una indicación, es un acertijo — y
+                  el caso que más confunde es real: un mismo dependiente
+                  aparece con dos determinantes, los dos ciertos en los datos,
+                  y elegir cuál se confirma ES la decisión de modelado. */}
+              {stage.schema.normalForm === "3NF" && pendingTransitive.length > 0 ? (
+                <div className="mt-3 flex flex-col gap-1.5">
+                  <p className="text-sm text-foreground">
+                    Estas {pendingTransitive.length === 1 ? "regla" : "reglas"} sin decidir{" "}
+                    {pendingTransitive.length === 1 ? "sale" : "salen"} de una columna que no es
+                    clave, así que {pendingTransitive.length === 1 ? "es la que" : "son las que"}{" "}
+                    esta etapa usaría:
+                  </p>
+                  <ul className="flex flex-col gap-0.5">
+                    {pendingTransitive.slice(0, PENDING_SHOWN).map((rule) => (
+                      <li
+                        key={`${rule.determinant.join("+")}->${rule.dependent}`}
+                        className="font-mono text-xs text-muted-foreground"
+                      >
+                        {rule.determinant.join(" + ")}
+                        <span aria-hidden="true"> &rarr; </span>
+                        <span className="sr-only"> determina </span>
+                        {rule.dependent}
+                      </li>
+                    ))}
+                  </ul>
+                  {pendingTransitive.length > PENDING_SHOWN ? (
+                    <p className="text-xs text-muted-foreground">
+                      Y {pendingTransitive.length - PENDING_SHOWN} más en el paso 1FN.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </>
           ) : (
             <>
               {change.newTables.length > 0 ? (

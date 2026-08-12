@@ -15,6 +15,7 @@ import { NormalizedSchemaSection } from "./NormalizedSchemaSection"
 import { ParsedSchemaOverview } from "./ParsedSchemaOverview"
 import { PrimaryKeySelector } from "./PrimaryKeySelector"
 import { PrimaryKeySuggestion } from "./PrimaryKeySuggestion"
+import { pendingTransitiveRules } from "./pendingTransitiveRules"
 import { confirmedDependenciesOf } from "./reviewedDependencies"
 import { suggestPrimaryKey } from "./suggestPrimaryKey"
 import { UploadHero, type SelectedSqlFile } from "./UploadHero"
@@ -316,6 +317,7 @@ export function SqlUploadContainer() {
             // esquema se decide solo con columnas y dependencias, así que
             // pasárselas ahí sería trabajo que nadie mira.
             sourceRows={analysis.table.rows}
+            pendingTransitive={pendingTransitiveRules(schemaReview.reviewed, schemaReview.primaryKey)}
             outcome={outcome}
           />
         ) : null}

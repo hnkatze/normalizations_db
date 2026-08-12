@@ -5,7 +5,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import type { NormalForm, Row } from "@/domain"
+import type { FunctionalDependency, NormalForm, Row } from "@/domain"
 import { NormalFormStagePanel } from "./NormalFormStagePanel"
 import type { NormalizationOutcome, NormalizationStageView } from "./normalizationOutcome"
 import { summarizeSchema, type SchemaSummary } from "./schemaSummary"
@@ -21,6 +21,8 @@ type NormalizedSchemaSectionProps = {
   readonly outcome: NormalizationOutcome
   /** Filas de la tabla original, para poblar cada tabla resultante. */
   readonly sourceRows: readonly Row[]
+  /** Reglas sin decidir que 3FN usaría, para poder nombrarlas si no hizo nada. */
+  readonly pendingTransitive: readonly FunctionalDependency[]
 }
 
 /**
@@ -33,6 +35,7 @@ type NormalizedSchemaSectionProps = {
  */
 export function NormalizedSchemaSection({
   sourceRows,
+  pendingTransitive,
   originalTableName,
   originalColumnCount,
   confirmedDependencyCount,
@@ -83,6 +86,7 @@ export function NormalizedSchemaSection({
               originalTableName={originalTableName}
               primaryKeyColumnCount={primaryKeyColumnCount}
           sourceRows={sourceRows}
+          pendingTransitive={pendingTransitive}
               ddlLabelId={DDL_LABEL_ID}
             />
 
