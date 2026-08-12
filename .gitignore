@@ -56,3 +56,4 @@ venv/
 # Agent instruction files (kept locally, not published)
 CLAUDE.md
 AGENTS.md
+.walkthrough/

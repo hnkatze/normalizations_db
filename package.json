@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:parser": "python scripts/dev_parse_server.py",
+    "walkthrough": "node scripts/walkthrough.mjs .walkthrough src/seeds/seed_ventas_raw.sql",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -34,6 +35,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.0",
+    "playwright": "^1.62.1",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.10"

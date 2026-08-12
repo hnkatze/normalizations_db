@@ -312,10 +312,15 @@ Estado al momento de escribir esto: las cuatro pasan en verde.
 Un `PostToolUse` hook typechequea cada archivo `.ts`/`.tsx` al escribirlo. Su silencio
 significa "no se chequeó", no "está limpio".
 
-**No hay navegador headless garantizado en el entorno de agentes.** Que el HTML servido
-contenga las clases nuevas **no prueba nada** sobre el layout. Toda afirmación sobre
-scroll, foco, animaciones o responsive que no venga de un navegador real es una estimación
-y debe declararse como tal.
+**Ahora SÍ se puede mirar la aplicación**, con `npm run walkthrough` (necesita los otros
+dos procesos levantados). Usa Playwright contra el Chrome del sistema —no descarga
+navegadores—, sube la semilla de referencia, confirma las reglas del answer key, recorre
+las tres etapas y deja capturas en `.walkthrough/`. Informa cuántas tablas salió cada
+etapa, el desborde horizontal del documento y cualquier error de consola.
+
+Eso no vuelve opcional la honestidad: typecheck, pruebas y build siguen sin decir nada
+sobre layout. La diferencia es que ahora hay una forma de comprobarlo en vez de estimarlo,
+así que una afirmación sobre lo visual sin captura que la respalde no tiene excusa.
 
 ---
 
