@@ -8,11 +8,13 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      /* Se añade borde alrededor del contenedor de la tabla y esquinas redondeadas */
+      className="relative w-full overflow-x-auto rounded-md border border-border"
     >
       <table
         data-slot="table"
-        className={cn("w-full caption-bottom text-sm", className)}
+        /* Se añade border-collapse para que las líneas se unan limpiamente */
+        className={cn("w-full caption-bottom text-sm border-collapse", className)}
         {...props}
       />
     </div>
@@ -23,7 +25,8 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   return (
     <thead
       data-slot="table-header"
-      className={cn("[&_tr]:border-b", className)}
+      /* Fondo levemente gris para diferenciar los encabezados */
+      className={cn("bg-muted/60 [&_tr]:border-b", className)}
       {...props}
     />
   )
@@ -69,8 +72,9 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
   return (
     <th
       data-slot="table-head"
+      /* Se añade 'border-r last:border-r-0' para bordes verticales entre columnas */
       className={cn(
-        "h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0",
+        "h-10 px-3 text-left align-middle font-semibold whitespace-nowrap text-foreground border-r border-border last:border-r-0 [&:has([role=checkbox])]:pr-0",
         className
       )}
       {...props}
@@ -82,8 +86,9 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
   return (
     <td
       data-slot="table-cell"
+      /* Se añade 'border-r last:border-r-0' para bordes verticales entre celdas */
       className={cn(
-        "p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0",
+        "p-2.5 align-middle whitespace-nowrap border-r border-border last:border-r-0 [&:has([role=checkbox])]:pr-0",
         className
       )}
       {...props}

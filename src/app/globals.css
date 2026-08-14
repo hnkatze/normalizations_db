@@ -95,11 +95,11 @@
   /* Papel y tinta, no lienzo neutro. El fondo es un crema cálido (matiz 80-85)
      y el texto una tinta azulada (matiz 250): esa oposición cálido/frío es la
      que da carácter, y es justo lo que no tiene una paleta monocroma. */
-  --background: oklch(0.975 0.008 85);
+  --background: oklch(88.109% 0.03877 259.325);
   --foreground: oklch(0.19 0.02 250);
   /* La hoja elevada. Antes card y background se diferenciaban en 0.010 de
      luminosidad, invisibles entre sí; ahora hay tres escalones reales. */
-  --card: oklch(0.995 0.005 85);
+  --card: oklch(97.913% 0.00011 271.152);
   --card-foreground: oklch(0.19 0.02 250);
   --popover: oklch(0.995 0.005 85);
   --popover-foreground: oklch(0.19 0.02 250);
