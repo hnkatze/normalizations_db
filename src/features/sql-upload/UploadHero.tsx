@@ -41,8 +41,8 @@ const FILE_STATUS_ID = "sql-file-status"
  * lógica del recorrido.
  */
 const UPLOAD_STEPS: readonly { readonly title: string; readonly detail: string }[] = [
-  { title: "Leer", detail: "Se interpreta el volcado sin ejecutarlo." },
-  { title: "Elegir", detail: "Vos decidís qué tabla se normaliza." },
+  { title: "Leer", detail: "Se interpreta el archivo sin ejecutarlo." },
+  { title: "Elegir", detail: "Usted decide qué tabla se normaliza." },
   { title: "Descomponer", detail: "1FN, 2FN y 3FN, paso por paso." },
 ]
 
@@ -278,8 +278,8 @@ export function UploadHero({
               "delay-75 mt-4 short:mt-2 max-w-prose text-pretty text-base short:text-sm text-muted-foreground"
             )}
           >
-            Subí un volcado plano y sin normalizar. Se detectan las dependencias
-            funcionales, las confirmás vos, y de ahí sale un esquema en 3FN.
+            Sube un archivo plano y sin normalizar. Se detectan las dependencias
+            funcionales, las confirmá usted, y de ahí sale un esquema en 3FN.
           </p>
 
           {/* El recorrido, enumerado. Dice de entrada que esto es un proceso de
@@ -329,8 +329,8 @@ export function UploadHero({
               className="upload-hero-motion size-7 short:size-5 text-muted-foreground transition-colors group-hover:text-primary"
             />
             <span className="flex flex-col gap-1">
-              <span className="font-medium text-foreground">Soltá aquí tu archivo .sql</span>
-              <span className="text-sm text-muted-foreground">o hacé clic para buscar</span>
+              <span className="font-medium text-foreground">Suelte aquí su archivo .sql</span>
+              <span className="text-sm text-muted-foreground">o haga clic para buscar</span>
             </span>
             {/* `sr-only`: el `<label>` ya cubre toda la zona de drop y reenvía
                 el clic al input nativamente. Sigue en el DOM, sigue en el orden
@@ -410,8 +410,8 @@ export function UploadHero({
                 focusable="false"
                 className="mt-0.5 size-3.5 shrink-0"
               />
-              Se lee cualquier volcado: SQL Server, MySQL, Oracle o PostgreSQL. Si
-              el archivo declara varias tablas, vas a elegir cuál normalizar.
+              Se lee cualquier archivo: SQL Server, MySQL, Oracle o PostgreSQL. Si
+              el archivo declara varias tablas, usted va a elegir cuál normalizar.
             </p>
           ) : null}
         </div>
