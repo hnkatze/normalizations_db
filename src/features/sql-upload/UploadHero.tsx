@@ -279,7 +279,7 @@ export function UploadHero({
             )}
           >
             Sube un archivo plano y sin normalizar. Se detectan las dependencias
-            funcionales, las confirmá usted, y de ahí sale un esquema en 3FN.
+            funcionales, las confirma usted, y de ahí sale un esquema en 3FN.
           </p>
 
           {/* El recorrido, enumerado. Dice de entrada que esto es un proceso de
