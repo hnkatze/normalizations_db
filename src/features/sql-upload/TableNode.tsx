@@ -2,7 +2,7 @@ import { Handle, type NodeProps, Position } from "@xyflow/react"
 
 import { Badge } from "@/components/ui/badge"
 
-import { TABLE_NODE_WIDTH, tableNodeSize, type TableFlowNode } from "./toErDiagramGraph"
+import { abbreviateSqlType, TABLE_NODE_WIDTH, tableNodeSize, type TableFlowNode } from "./toErDiagramGraph"
 
 /**
  * Una tabla del diagrama: su nombre y sus columnas, con la misma marca de
@@ -35,8 +35,12 @@ export function TableNode({ data }: NodeProps<TableFlowNode>) {
               key={column.name}
               className="flex items-center gap-1 py-0.5 font-mono text-xs"
             >
-              <span className="truncate text-foreground">{column.name}</span>
-              <span className="shrink-0 truncate text-muted-foreground">{column.sqlType}</span>
+              <span className="min-w-0 flex-1 truncate text-foreground" title={column.name}>
+                {column.name}
+              </span>
+              <span className="max-w-16 shrink-0 truncate text-muted-foreground" title={column.sqlType}>
+                {abbreviateSqlType(column.sqlType)}
+              </span>
               {column.isPrimaryKey ? (
                 <Badge variant="outline" className="ml-auto shrink-0 px-1 text-[10px]">
                   PK

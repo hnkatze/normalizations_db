@@ -29,6 +29,29 @@ export function tableNodeSize(columnCount: number): { readonly width: number; re
   }
 }
 
+const SQL_TYPE_ABBREVIATIONS: Readonly<Record<string, string>> = {
+  "character varying": "varchar",
+  character: "char",
+  integer: "int",
+  boolean: "bool",
+  "double precision": "double",
+  "timestamp without time zone": "timestamp",
+  "timestamp with time zone": "timestamptz",
+  "time without time zone": "time",
+  "time with time zone": "timetz",
+}
+
+/** Forma corta de un tipo de `information_schema` (p. ej. "character varying" → "varchar"); sin mapeo conocido se devuelve tal cual. */
+export function abbreviateSqlType(sqlType: string): string {
+  return SQL_TYPE_ABBREVIATIONS[sqlType.toLowerCase()] ?? sqlType
+}
+
+/** El nombre de columna es lo único que la identifica: va primero y completo, con el tipo y el rol de clave como contexto adicional. */
+function columnAriaLabel(column: ErDiagramColumn): string {
+  const role = column.isPrimaryKey ? ", clave primaria" : column.isForeignKey ? ", clave foránea" : ""
+  return `${column.name} (${column.sqlType}${role})`
+}
+
 /**
  * Nodos y aristas de React Flow, con posiciones ya calculadas por dagre.
  *
@@ -71,6 +94,8 @@ export function toErDiagramGraph(input: ErDiagramInput): ErDiagramGraph {
       // dagre posiciona por el CENTRO del nodo; React Flow, por su esquina superior izquierda.
       position: { x: laidOut.x - size.width / 2, y: laidOut.y - size.height / 2 },
       data: { tableName: table.name, columns: table.columns },
+      // Nombre completo de la tabla y de cada columna: en la tarjeta se truncan visualmente, pero acá no se pierden.
+      ariaLabel: `Tabla ${table.name}. Columnas: ${table.columns.map(columnAriaLabel).join(", ")}`,
     }
   })
 

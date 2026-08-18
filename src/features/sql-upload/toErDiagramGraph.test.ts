@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import type { ErDiagramInput } from "./erDiagramInput"
-import { tableNodeSize, toErDiagramGraph } from "./toErDiagramGraph"
+import { abbreviateSqlType, tableNodeSize, toErDiagramGraph } from "./toErDiagramGraph"
 
 const input: ErDiagramInput = {
   tables: [
@@ -172,5 +172,49 @@ describe("toErDiagramGraph", () => {
 
     expect(nodes[0]?.position.x).not.toBeNaN()
     expect(nodes[0]?.position.y).not.toBeNaN()
+  })
+
+  it("carries the full table and column names in the node's aria label, even for columns visually truncated in the card", () => {
+    const withLongColumns: ErDiagramInput = {
+      tables: [
+        {
+          name: "cliente_ciudad_id",
+          columns: [
+            { name: "cliente_ciudad_id", sqlType: "integer", isPrimaryKey: true, isForeignKey: false },
+            {
+              name: "cliente_ciudad_nombre",
+              sqlType: "character varying",
+              isPrimaryKey: false,
+              isForeignKey: false,
+            },
+            { name: "cliente_ciudad_pais", sqlType: "character varying", isPrimaryKey: false, isForeignKey: false },
+          ],
+        },
+      ],
+      relations: [],
+    }
+
+    const { nodes } = toErDiagramGraph(withLongColumns)
+
+    expect(nodes[0]?.ariaLabel).toContain("cliente_ciudad_nombre")
+    expect(nodes[0]?.ariaLabel).toContain("cliente_ciudad_pais")
+    expect(nodes[0]?.ariaLabel).toContain("clave primaria")
+  })
+})
+
+describe("abbreviateSqlType", () => {
+  it("shortens known information_schema type names", () => {
+    expect(abbreviateSqlType("character varying")).toBe("varchar")
+    expect(abbreviateSqlType("integer")).toBe("int")
+    expect(abbreviateSqlType("timestamp without time zone")).toBe("timestamp")
+  })
+
+  it("matches case-insensitively", () => {
+    expect(abbreviateSqlType("CHARACTER VARYING")).toBe("varchar")
+  })
+
+  it("returns a type with no known abbreviation unchanged", () => {
+    expect(abbreviateSqlType("numeric")).toBe("numeric")
+    expect(abbreviateSqlType("some_custom_type")).toBe("some_custom_type")
   })
 })
