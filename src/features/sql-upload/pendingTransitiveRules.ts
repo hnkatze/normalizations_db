@@ -30,7 +30,10 @@ export function pendingTransitiveRules(
   const confirmed = reviewed
     .filter((entry) => entry.decision === "confirmed")
     .map((entry) => entry.dependency)
-  const canonical = createCanonicalizer(allColumns, confirmed)
+  // Con la clave: si no, dos canonicalizaciones de la misma tabla podrían
+  // elegir representantes distintos y esta pantalla ofrecería una regla que
+  // el motor después reinterpreta.
+  const canonical = createCanonicalizer(allColumns, confirmed, primaryKey)
 
   return reviewed
     .filter((entry) => entry.decision === "pending")

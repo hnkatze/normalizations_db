@@ -11,6 +11,8 @@ import {
   closureOf,
 } from "./attributeClosure"
 
+import { createCanonicalizer } from "@/features/normalization"
+
 import {
   dependencyKey,
 } from "./reviewedDependencies"
@@ -91,11 +93,36 @@ export function suggestFunctionalDependencies(
   const insufficientEvidence:
     FunctionalDependency[] = []
 
-  const canonicalByColumn =
-    buildCanonicalRepresentativeByColumn(
-      dependencies,
-      primaryKey,
+  /*
+   * El MISMO canonicalizador que usa el motor.
+   *
+   * Había dos: este módulo tenía el suyo y el
+   * motor el propio, con criterios distintos de
+   * desempate. Dos versiones de la misma regla
+   * divergen en silencio, y esta pantalla puede
+   * terminar ofreciendo una regla que el motor
+   * después reinterpreta de otra forma.
+   *
+   * Las vacuas se filtran ACÁ y no adentro: este
+   * módulo ve todo lo DETECTADO, donde una tabla
+   * de filas únicas hace que toda columna
+   * determine a toda otra. El motor solo ve lo
+   * que el usuario ya confirmó.
+   */
+  const canonicalOf =
+    createCanonicalizer(
       columnOrder,
+
+      dependencies.filter(
+        (dependency) =>
+          !dependency.evidence
+            .isTrivial &&
+          !isVacuous(
+            dependency.evidence,
+          ),
+      ),
+
+      primaryKey,
     )
 
   for (
@@ -184,9 +211,7 @@ export function suggestFunctionalDependencies(
     }
 
     const canonical =
-      canonicalByColumn.get(
-        determinant,
-      ) ?? determinant
+      canonicalOf(determinant)
 
     /*
      * Si esta columna es un identificador alternativo
@@ -281,339 +306,13 @@ export function suggestFunctionalDependencies(
   }
 }
 
-/**
- * Encuentra columnas que se determinan mutuamente.
- *
- * A <-> B significa que, dentro de la muestra,
- * ambas pueden funcionar como identificadores
- * alternativos de la misma entidad.
- */
-function buildCanonicalRepresentativeByColumn(
-  dependencies:
-    readonly FunctionalDependency[],
-  primaryKey:
-    readonly ColumnName[],
-  columnOrder:
-    readonly ColumnName[],
-): ReadonlyMap<
-  ColumnName,
-  ColumnName
-> {
-  const dependencyByKey =
-    new Map(
-      dependencies.map(
-        (dependency) => [
-          dependencyKey(
-            dependency,
-          ),
-          dependency,
-        ],
-      ),
-    )
 
-  const adjacency =
-    new Map<
-      ColumnName,
-      Set<ColumnName>
-    >()
 
-  for (
-    const dependency of
-    dependencies
-  ) {
-    if (
-      dependency.determinant
-        .length !== 1 ||
-      dependency.evidence
-        .isTrivial ||
-      isVacuous(
-        dependency.evidence,
-      )
-    ) {
-      continue
-    }
 
-    const determinant =
-      dependency.determinant[0]
 
-    if (
-      determinant === undefined
-    ) {
-      continue
-    }
 
-    const reverseKey =
-      dependencyKey({
-        determinant: [
-          dependency.dependent,
-        ],
 
-        dependent:
-          determinant,
 
-        evidence:
-          dependency.evidence,
-      })
-
-    const reverse =
-      dependencyByKey.get(
-        reverseKey,
-      )
-
-    if (
-      reverse === undefined ||
-      reverse.evidence
-        .isTrivial ||
-      isVacuous(
-        reverse.evidence,
-      )
-    ) {
-      continue
-    }
-
-    addConnection(
-      adjacency,
-      determinant,
-      dependency.dependent,
-    )
-
-    addConnection(
-      adjacency,
-      dependency.dependent,
-      determinant,
-    )
-  }
-
-  const result =
-    new Map<
-      ColumnName,
-      ColumnName
-    >()
-
-  const visited =
-    new Set<ColumnName>()
-
-  for (
-    const column of
-    adjacency.keys()
-  ) {
-    if (
-      visited.has(column)
-    ) {
-      continue
-    }
-
-    const component:
-      ColumnName[] = []
-
-    const pending = [
-      column,
-    ]
-
-    while (
-      pending.length > 0
-    ) {
-      const current =
-        pending.pop()
-
-      if (
-        current === undefined ||
-        visited.has(current)
-      ) {
-        continue
-      }
-
-      visited.add(current)
-
-      component.push(
-        current,
-      )
-
-      for (
-        const neighbour of
-        adjacency.get(
-          current,
-        ) ?? []
-      ) {
-        if (
-          !visited.has(
-            neighbour,
-          )
-        ) {
-          pending.push(
-            neighbour,
-          )
-        }
-      }
-    }
-
-    const canonical =
-      chooseCanonicalColumn(
-        component,
-        primaryKey,
-        columnOrder,
-      )
-
-    for (
-      const member of
-      component
-    ) {
-      result.set(
-        member,
-        canonical,
-      )
-    }
-  }
-
-  return result
-}
-
-function addConnection(
-  adjacency:
-    Map<
-      ColumnName,
-      Set<ColumnName>
-    >,
-  source: ColumnName,
-  target: ColumnName,
-): void {
-  const existing =
-    adjacency.get(source)
-
-  if (
-    existing !== undefined
-  ) {
-    existing.add(
-      target,
-    )
-
-    return
-  }
-
-  adjacency.set(
-    source,
-    new Set([
-      target,
-    ]),
-  )
-}
-
-function chooseCanonicalColumn(
-  columns:
-    readonly ColumnName[],
-  primaryKey:
-    readonly ColumnName[],
-  columnOrder:
-    readonly ColumnName[],
-): ColumnName {
-  const position =
-    new Map(
-      columnOrder.map(
-        (column, index) => [
-          column,
-          index,
-        ],
-      ),
-    )
-
-  const ordered = [
-    ...columns,
-  ].sort(
-    (left, right) => {
-      const leftIsKey =
-        primaryKey.includes(
-          left,
-        )
-
-      const rightIsKey =
-        primaryKey.includes(
-          right,
-        )
-
-      if (
-        leftIsKey !==
-        rightIsKey
-      ) {
-        return leftIsKey
-          ? -1
-          : 1
-      }
-
-      const leftLooksLikeId =
-        looksLikeIdentifier(
-          left,
-        )
-
-      const rightLooksLikeId =
-        looksLikeIdentifier(
-          right,
-        )
-
-      if (
-        leftLooksLikeId !==
-        rightLooksLikeId
-      ) {
-        return leftLooksLikeId
-          ? -1
-          : 1
-      }
-
-      const leftPosition =
-        position.get(
-          left,
-        ) ??
-        Number.MAX_SAFE_INTEGER
-
-      const rightPosition =
-        position.get(
-          right,
-        ) ??
-        Number.MAX_SAFE_INTEGER
-
-      if (
-        leftPosition !==
-        rightPosition
-      ) {
-        return (
-          leftPosition -
-          rightPosition
-        )
-      }
-
-      return left.localeCompare(
-        right,
-      )
-    },
-  )
-
-  const first =
-    ordered[0]
-
-  if (
-    first === undefined
-  ) {
-    throw new Error(
-      "No se pudo seleccionar un identificador canónico.",
-    )
-  }
-
-  return first
-}
-
-/**
- * Heurística utilizada SOLAMENTE para desempatar
- * identificadores que ya demostraron determinarse
- * mutuamente.
- *
- * Nunca crea una DF basándose en el nombre.
- */
-function looksLikeIdentifier(
-  column: ColumnName,
-): boolean {
-  return /(^id$|^id_|_id$|^uuid$|_uuid$|^code$|_code$|^codigo$|_codigo$|^key$|_key$)/i.test(
-    column,
-  )
-}
 
 function sameAttributeSet(
   left:

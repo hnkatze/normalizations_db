@@ -48,7 +48,7 @@ export function classifyNormalForm(input: NormalizationInput): NormalFormVerdict
   const { table, confirmedDependencies, primaryKey } = input
   const allColumns = columnNamesOf(table)
   const primaryKeySet = new Set(primaryKey)
-  const canonicalColumn = createCanonicalizer(allColumns, confirmedDependencies)
+  const canonicalColumn = createCanonicalizer(allColumns, confirmedDependencies, primaryKey)
 
   /** Reordena según el orden de declaración, igual que el motor. */
   function orderColumns(columns: readonly ColumnName[]): readonly ColumnName[] {

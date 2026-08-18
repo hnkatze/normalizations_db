@@ -143,23 +143,71 @@ function createColumnUnionFind(columns: readonly ColumnName[]): {
 export function createCanonicalizer(
   allColumns: readonly ColumnName[],
   confirmedDependencies: readonly FunctionalDependency[],
+  primaryKey: readonly ColumnName[] = [],
 ): (column: ColumnName) => ColumnName {
   const columnUnionFind = createColumnUnionFind(allColumns)
   for (const [columnA, columnB] of findReciprocalPairs(confirmedDependencies)) {
     columnUnionFind.union(columnA, columnB)
   }
-  const representativeByRoot = new Map<ColumnName, ColumnName>()
+
+  const membersByRoot = new Map<ColumnName, ColumnName[]>()
   for (const column of allColumns) {
     const root = columnUnionFind.find(column)
-    if (!representativeByRoot.has(root)) {
-      representativeByRoot.set(root, column)
-    }
+    membersByRoot.set(root, [...(membersByRoot.get(root) ?? []), column])
+  }
+
+  const representativeByRoot = new Map<ColumnName, ColumnName>()
+  for (const [root, members] of membersByRoot) {
+    representativeByRoot.set(root, chooseRepresentative(members, primaryKey, allColumns))
   }
 
   return (column) => {
     const root = columnUnionFind.find(column)
     return representativeByRoot.get(root) ?? column
   }
+}
+
+/**
+ * Cuál de varias claves alternativas le da el nombre a la entidad.
+ *
+ * El criterio anterior era "la declarada primero", y eso deja que el orden del
+ * `CREATE TABLE` decida la identidad: con `cliente_email` declarada antes que
+ * `cliente_id`, la tabla extraída se llamaba por el email. Manda la clave que
+ * el usuario eligió; después, el nombre que se comporta como identificador;
+ * recién al final, el orden de declaración, que sigue rompiendo cualquier
+ * empate de forma determinista.
+ */
+function chooseRepresentative(
+  members: readonly ColumnName[],
+  primaryKey: readonly ColumnName[],
+  allColumns: readonly ColumnName[],
+): ColumnName {
+  const positionOf = new Map(allColumns.map((column, index) => [column, index]))
+  const primaryKeySet = new Set(primaryKey)
+
+  return [...members].sort((left, right) => {
+    const leftIsKey = primaryKeySet.has(left)
+    const rightIsKey = primaryKeySet.has(right)
+    if (leftIsKey !== rightIsKey) {
+      return leftIsKey ? -1 : 1
+    }
+    const leftLooksLikeId = looksLikeIdentifier(left)
+    const rightLooksLikeId = looksLikeIdentifier(right)
+    if (leftLooksLikeId !== rightLooksLikeId) {
+      return leftLooksLikeId ? -1 : 1
+    }
+    return (positionOf.get(left) ?? 0) - (positionOf.get(right) ?? 0)
+  })[0] as ColumnName
+}
+
+/**
+ * Desempata identificadores que YA demostraron determinarse mutuamente.
+ *
+ * Nunca crea ni descarta una dependencia: para cuando esto se consulta, los
+ * datos ya probaron la equivalencia. Solo elige cuál de los nombres queda.
+ */
+function looksLikeIdentifier(column: ColumnName): boolean {
+  return /(^id$|^id_|_id$|^uuid$|_uuid$|^code$|_code$|^codigo$|_codigo$|^key$|_key$)/i.test(column)
 }
 
 function findReciprocalPairs(
@@ -304,7 +352,7 @@ function runNormalizationStages(input: NormalizationInput): NormalizationStages 
   // mismo determinante. El representante es el miembro declarado primero en la
   // tabla de origen, de modo que la elección es determinista e independiente del
   // orden propio del arreglo de dependencias confirmadas.
-  const canonicalColumn = createCanonicalizer(allColumns, confirmedDependencies)
+  const canonicalColumn = createCanonicalizer(allColumns, confirmedDependencies, primaryKey)
 
   function classify(dependency: FunctionalDependency): DeterminantClassification {
     const determinant = orderColumns([...new Set(dependency.determinant.map(canonicalColumn))])
