@@ -1,13 +1,13 @@
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import type { ParsedDatabase, SqlDialect } from "@/domain"
 import { cn } from "@/lib/utils"
 
-import { describeParsedTable, resolveSelectedTable, totalRowCount } from "./describeParsedTable"
+import { resolveSelectedTable, totalRowCount } from "./describeParsedTable"
 import { ParsedTableDetail } from "./ParsedTableDetail"
 import { SchemaRelationshipsSection } from "./SchemaRelationshipsSection"
+import { TableIndex } from "./TableIndex"
 
 /** Cómo se llama cada dialecto fuera del código. */
 const DIALECT_LABELS: Readonly<Record<SqlDialect, string>> = {
@@ -80,32 +80,11 @@ export function ParsedSchemaOverview({
         )}
       >
         {hasChoice ? (
-          <div
-            className="flex flex-wrap gap-2 lg:flex-col lg:flex-nowrap lg:border-r lg:border-border lg:pr-6"
-            role="group"
-            aria-label="Tablas encontradas"
-          >
-            {database.tables.map((table) => {
-              const described = describeParsedTable(table)
-              const isSelected = selected?.name === table.name
-              return (
-                <Button
-                  key={table.name}
-                  type="button"
-                  variant={isSelected ? "default" : "outline"}
-                  size="sm"
-                  aria-pressed={isSelected}
-                  onClick={() => onSelectTable(table.name)}
-                  className="h-auto flex-col items-start gap-0.5 py-2 lg:w-full"
-                >
-                  <span className="font-mono text-xs">{table.name}</span>
-                  <span className="text-xs font-normal opacity-80">
-                    {described.columns.length} col · {described.rowCount} filas
-                  </span>
-                </Button>
-              )
-            })}
-          </div>
+          <TableIndex
+            tables={database.tables}
+            selectedTableName={selected?.name}
+            onSelectTable={onSelectTable}
+          />
         ) : null}
 
         {selected !== null ? (
@@ -118,7 +97,7 @@ export function ParsedSchemaOverview({
         ) : null}
 
         <div className={cn("flex flex-col gap-3", hasChoice && "lg:col-span-2")}>
-          <SchemaRelationshipsSection database={database} />
+          <SchemaRelationshipsSection database={database} selectedTableName={selected?.name ?? null} />
           <ParseWarnings database={database} />
         </div>
       </CardContent>

@@ -6,11 +6,13 @@ import { Badge } from "@/components/ui/badge"
 import type { ParsedDatabase } from "@/domain"
 
 import { deriveForeignKeyGraph, type ForeignKeyEdge, type ForeignKeySchemaGraph } from "./deriveForeignKeyGraph"
+import { deriveSchemaDiagramView, type SchemaDiagramView } from "./deriveSchemaDiagramView"
 import { ErDiagram } from "./ErDiagram"
-import { parsedDatabaseToErDiagram } from "./parsedSchemaToErDiagram"
 
 type SchemaRelationshipsSectionProps = {
   readonly database: ParsedDatabase
+  /** `null` cuando el archivo no tiene ninguna tabla, o ninguna está elegida todavía. */
+  readonly selectedTableName: string | null
 }
 
 /**
@@ -23,10 +25,10 @@ type SchemaRelationshipsSectionProps = {
  * Colapsada por defecto, como el DDL de cada etapa: el lienzo mide varios
  * cientos de píxeles y el paso ya entra justo en pantalla sin él.
  */
-export function SchemaRelationshipsSection({ database }: SchemaRelationshipsSectionProps) {
+export function SchemaRelationshipsSection({ database, selectedTableName }: SchemaRelationshipsSectionProps) {
   const [isOpen, setIsOpen] = useState(false)
   const graph = deriveForeignKeyGraph(database)
-  const canDraw = database.tables.length > 1 && graph.edges.length > 0
+  const view = deriveSchemaDiagramView(database, selectedTableName)
   // Si TODAS las tablas quedaron aisladas, listarlas repetiría exactamente lo
   // que ya dice el aviso de "sin relaciones": no suma información nueva.
   const isolatedWorthShowing =
@@ -42,18 +44,7 @@ export function SchemaRelationshipsSection({ database }: SchemaRelationshipsSect
       </summary>
 
       <div className="flex flex-col gap-4 border-t border-border px-3 py-3">
-        {canDraw ? (
-          isOpen ? (
-            // Montar el lienzo solo cuando el <details> ya está abierto: React
-            // Flow mide su contenedor al montar, y uno recién revelado por CSS
-            // todavía reporta 0×0, así que fitView encuadraría contra la nada.
-            <ErDiagram input={parsedDatabaseToErDiagram(database)} />
-          ) : null
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Este archivo no declara relaciones entre tablas.
-          </p>
-        )}
+        <DiagramArea view={view} isOpen={isOpen} />
 
         {isolatedWorthShowing ? (
           <div className="flex flex-col gap-1.5">
@@ -92,6 +83,60 @@ export function SchemaRelationshipsSection({ database }: SchemaRelationshipsSect
       </div>
     </details>
   )
+}
+
+type DiagramAreaProps = {
+  readonly view: SchemaDiagramView
+  readonly isOpen: boolean
+}
+
+/**
+ * El lienzo mide 0×0 mientras el `<details>` sigue cerrado, así que solo se
+ * monta con `isOpen`; los mensajes de texto no dependen de esa medición.
+ */
+function DiagramArea({ view, isOpen }: DiagramAreaProps) {
+  switch (view.kind) {
+    case "no-relations":
+      return (
+        <p className="text-sm text-muted-foreground">
+          Este archivo no declara relaciones entre tablas.
+        </p>
+      )
+    case "select-table":
+      return (
+        <p className="text-sm text-muted-foreground">
+          Este archivo tiene {view.tableCount} tablas: dibujarlas todas tardaría varios segundos y el
+          resultado no se podría leer. Elegí una tabla del índice para ver sus relaciones directas.
+        </p>
+      )
+    case "isolated-table":
+      return (
+        <p className="text-sm text-muted-foreground">
+          <span className="font-mono">{view.tableName}</span> no tiene relaciones directas con otras
+          tablas.
+        </p>
+      )
+    case "full-schema":
+      // Montar el lienzo solo cuando el <details> ya está abierto: React Flow
+      // mide su contenedor al montar, y uno recién revelado por CSS todavía
+      // reporta 0×0, así que fitView encuadraría contra la nada.
+      return isOpen ? <ErDiagram input={view.input} /> : null
+    case "neighborhood":
+      return isOpen ? (
+        <div className="flex flex-col gap-2">
+          <p aria-live="polite" className="text-xs text-muted-foreground">
+            Vecindario de <span className="font-mono">{view.tableName}</span>:{" "}
+            {view.neighborCount} {view.neighborCount === 1 ? "tabla relacionada" : "tablas relacionadas"}
+            {" "}de {view.tableCount} en el archivo. No es el esquema completo.
+          </p>
+          <ErDiagram input={view.input} />
+        </div>
+      ) : null
+    default: {
+      const _never: never = view
+      throw new Error("unhandled variant: " + String(_never))
+    }
+  }
 }
 
 function summaryText(graph: ForeignKeySchemaGraph): string {
