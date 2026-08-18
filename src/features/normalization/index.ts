@@ -4,4 +4,3 @@ export { createCanonicalizer, normalizeByStage, normalizeTo3NF } from "./normali
 export type { NormalizationStages } from "./normalizeTo3NF"
 export { generateDdl } from "./generateDdl"
 export { projectTableRows } from "./projectTableRows"
-export { toErDiagram } from "./toErDiagram"
