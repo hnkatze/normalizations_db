@@ -1021,6 +1021,9 @@ export function SqlUploadContainer() {
                 detection={
                   analysis.detection
                 }
+                isPrimaryKeyConfirmed={
+                  schemaReview.isPrimaryKeyConfirmed
+                }
                 reviewed={
                   schemaReview.reviewed
                 }
