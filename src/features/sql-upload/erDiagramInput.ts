@@ -67,11 +67,17 @@ export function normalizedSchemaToErDiagram(schema: NormalizedSchema): ErDiagram
  * del objeto entero evita sincronizar estado en un efecto.
  */
 export function erDiagramSignature(input: ErDiagramInput): string {
-  const tables = input.tables
-    .map((table) => `${table.name}(${table.columns.map((column) => column.name).join(",")})`)
-    .join("|")
-  const relations = input.relations
-    .map((relation) => `${relation.fromTable}->${relation.toTable}:${relation.toColumns.join(",")}`)
-    .join("|")
-  return `${tables}::${relations}`
+  // Un identificador entre corchetes de SSMS admite cualquier carácter: concatenar
+  // nombres crudos con separadores dejaba colisionar dos esquemas distintos.
+  return JSON.stringify({
+    tables: input.tables.map((table) => ({
+      name: table.name,
+      columns: table.columns.map((column) => column.name),
+    })),
+    relations: input.relations.map((relation) => ({
+      fromTable: relation.fromTable,
+      toTable: relation.toTable,
+      toColumns: relation.toColumns,
+    })),
+  })
 }

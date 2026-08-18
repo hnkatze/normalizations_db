@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import type { NormalizedSchema } from "@/domain"
 
-import { erDiagramSignature, normalizedSchemaToErDiagram } from "./erDiagramInput"
+import { erDiagramSignature, normalizedSchemaToErDiagram, type ErDiagramInput } from "./erDiagramInput"
 
 const schema: NormalizedSchema = {
   normalForm: "3NF",
@@ -159,6 +159,38 @@ describe("erDiagramSignature", () => {
 
     expect(erDiagramSignature(normalizedSchemaToErDiagram(schema))).not.toBe(
       erDiagramSignature(normalizedSchemaToErDiagram(renamed)),
+    )
+  })
+
+  it("does not collide for two structurally different schemas whose real SSMS names contain the signature's own delimiters", () => {
+    // Nombres reales devueltos por sqlglot para identificadores entre corchetes:
+    // `CREATE TABLE [ventas(2024),norte] ([col|a] INT, [b:c] INT)`.
+    const twoSeparateColumns: ErDiagramInput = {
+      tables: [
+        {
+          name: "ventas(2024),norte",
+          columns: [
+            { name: "col|a", sqlType: "int", isPrimaryKey: false, isForeignKey: false },
+            { name: "b:c", sqlType: "int", isPrimaryKey: false, isForeignKey: false },
+          ],
+        },
+      ],
+      relations: [],
+    }
+    const oneColumnWithACommaInItsName: ErDiagramInput = {
+      tables: [
+        {
+          name: "ventas(2024),norte",
+          columns: [
+            { name: "col|a,b:c", sqlType: "int", isPrimaryKey: false, isForeignKey: false },
+          ],
+        },
+      ],
+      relations: [],
+    }
+
+    expect(erDiagramSignature(twoSeparateColumns)).not.toBe(
+      erDiagramSignature(oneColumnWithACommaInItsName),
     )
   })
 })

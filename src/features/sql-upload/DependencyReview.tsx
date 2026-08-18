@@ -19,12 +19,7 @@ type DependencyReviewProps = {
   readonly detection: DetectionResult
   readonly reviewed: readonly ReviewedDependency[]
 
-  /**
-   * Opcional para no romper al consumidor actual, que todavía no lo pasa.
-   * Sin él se preserva el heurístico previo (aproximado, no distingue un
-   * archivo de solo esquema de una PK sin confirmar).
-   */
-  readonly isPrimaryKeyConfirmed?: boolean
+  readonly isPrimaryKeyConfirmed: boolean
 
   readonly onToggleConfirm: (dependency: FunctionalDependency) => void
   readonly onSetGroupDecision: (
@@ -63,11 +58,6 @@ export function DependencyReview({
   const impliedKeys = impliedDependencyKeys(detection.dependencies, confirmed)
   const counts = countReviewStatus(reviewed, impliedKeys)
 
-  // Sin la señal del contenedor, `discarded > 0` es el mismo heurístico que
-  // ya usaba esta pantalla: se aplicó una clasificación automática porque
-  // algo terminó descartado. No cubre el caso de 0 dependencias detectadas.
-  const resolvedIsPrimaryKeyConfirmed = isPrimaryKeyConfirmed ?? counts.discarded > 0
-
   const { recommended, optional } = splitRecommendedDependencyGroups(groups, confirmedKeys)
 
   return (
@@ -86,7 +76,7 @@ export function DependencyReview({
 
       <CardContent className="flex flex-col gap-4">
         <DependencyClassificationBanner
-          isPrimaryKeyConfirmed={resolvedIsPrimaryKeyConfirmed}
+          isPrimaryKeyConfirmed={isPrimaryKeyConfirmed}
           totalDependencies={detection.dependencies.length}
         />
 
@@ -96,7 +86,7 @@ export function DependencyReview({
           className="flex flex-wrap gap-x-6 gap-y-1.5 text-sm"
         >
           <DetectionStat
-            label={resolvedIsPrimaryKeyConfirmed ? "Requieren revisión" : "Por decidir"}
+            label={isPrimaryKeyConfirmed ? "Requieren revisión" : "Por decidir"}
             value={counts.pending}
           />
 
