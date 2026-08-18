@@ -80,6 +80,21 @@ export function suggestFunctionalDependencies(
     readonly ColumnName[],
   columnOrder:
     readonly ColumnName[],
+  /**
+   * Columnas que son una cuenta hecha con otras
+   * columnas, no un dato propio.
+   *
+   * Nunca se preseleccionan como determinante:
+   * `subtotal` determina a `producto_precio` y
+   * `cantidad` con evidencia impecable, y aun
+   * así extraer una tabla `subtotal` no saca
+   * ninguna redundancia. Van a revisión manual,
+   * no al tacho: siguen siendo ciertas, y el
+   * usuario decide.
+   */
+  derivedColumns:
+    ReadonlySet<ColumnName> =
+    new Set(),
 ): FunctionalDependencySuggestion {
   const candidates:
     FunctionalDependency[] = []
@@ -231,6 +246,19 @@ export function suggestFunctionalDependencies(
     if (
       canonical !==
       determinant
+    ) {
+      requiresReview.push(
+        dependency,
+      )
+
+      continue
+    }
+
+    if (
+      dependency.determinant.some(
+        (column) =>
+          derivedColumns.has(column),
+      )
     ) {
       requiresReview.push(
         dependency,

@@ -3,9 +3,10 @@ import type {
   FlatTable,
   ParsedTable,
 } from "@/domain"
+import type { DerivedColumn } from "@/features/fd-detection"
 
 import { toFlatTable } from "@/domain"
-import { detectFunctionalDependencies } from "@/features/fd-detection"
+import { detectDerivedColumns, detectFunctionalDependencies } from "@/features/fd-detection"
 
 /**
  * Hasta dos columnas por determinante.
@@ -17,6 +18,12 @@ export const MAX_DETERMINANT_SIZE = 2
 export type ParsedTableAnalysis = {
   readonly table: FlatTable
   readonly detection: DetectionResult
+  /**
+   * Columnas que son una cuenta hecha con otras. Se calculan acá, junto a la
+   * detección, porque necesitan las MISMAS filas y ningún consumidor debería
+   * tener que acordarse de pedirlas aparte.
+   */
+  readonly derivedColumns: readonly DerivedColumn[]
 }
 
 /**
@@ -40,6 +47,9 @@ export function analyzeFlatTable(
             MAX_DETERMINANT_SIZE,
         },
       ),
+
+    derivedColumns:
+      detectDerivedColumns(table),
   }
 }
 

@@ -532,6 +532,12 @@ export function SqlUploadContainer() {
         currentAnalysis.table.columns.map(
           (column) => column.name,
         ),
+
+        new Set(
+          currentAnalysis.derivedColumns.map(
+            (derived) => derived.column,
+          ),
+        ),
       )
 
     schemaReview.applyDependencySuggestion(
