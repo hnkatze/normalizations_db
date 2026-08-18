@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 
 import { describeParsedTable, resolveSelectedTable, totalRowCount } from "./describeParsedTable"
 import { ParsedTableDetail } from "./ParsedTableDetail"
+import { SchemaRelationshipsSection } from "./SchemaRelationshipsSection"
 
 /** Cómo se llama cada dialecto fuera del código. */
 const DIALECT_LABELS: Readonly<Record<SqlDialect, string>> = {
@@ -116,7 +117,8 @@ export function ParsedSchemaOverview({
           </div>
         ) : null}
 
-        <div className={cn(hasChoice && "lg:col-span-2")}>
+        <div className={cn("flex flex-col gap-3", hasChoice && "lg:col-span-2")}>
+          <SchemaRelationshipsSection database={database} />
           <ParseWarnings database={database} />
         </div>
       </CardContent>
