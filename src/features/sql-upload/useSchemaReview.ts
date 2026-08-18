@@ -53,6 +53,12 @@ type SchemaReview = {
   readonly editPrimaryKey:
     () => void
 
+  readonly cancelPrimaryKeyEdit: (
+    columns:
+      readonly ColumnName[],
+    wasConfirmed: boolean,
+  ) => void
+
   readonly toggleConfirmedDependency: (
     dependency:
       FunctionalDependency,
@@ -215,6 +221,32 @@ export function useSchemaReview():
   }
 
   /**
+   * Cancela una corrección en curso y restaura la PK exactamente
+   * como estaba antes de entrar en modo edición.
+   *
+   * A diferencia de confirmPrimaryKey, acepta una selección vacía:
+   * cancelar debe poder devolver al estado "sin confirmar todavía"
+   * con el que arrancó la corrección.
+   */
+  function cancelPrimaryKeyEdit(
+    columns:
+      readonly ColumnName[],
+    wasConfirmed: boolean,
+  ) {
+    setPrimaryKey(columns)
+
+    setIsPrimaryKeyConfirmed(
+      wasConfirmed,
+    )
+
+    setPrimaryKeyAnnouncement(
+      wasConfirmed
+        ? `Clave primaria confirmada: ${columns.join(", ")}.`
+        : "Corrección de clave primaria cancelada.",
+    )
+  }
+
+  /**
    * Alterna una dependencia individual entre
    * pendiente y confirmada.
    */
@@ -312,6 +344,7 @@ export function useSchemaReview():
     applySuggestedPrimaryKey,
     confirmPrimaryKey,
     editPrimaryKey,
+    cancelPrimaryKeyEdit,
 
     toggleConfirmedDependency,
     setGroupDecision,

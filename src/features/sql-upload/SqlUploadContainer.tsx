@@ -109,6 +109,15 @@ export function SqlUploadContainer() {
     setHasGeneratedFirstNormalFormPrimaryKey,
   ] = useState(false)
 
+  /*
+   * Estado de la PK justo antes de entrar en modo edición, para que
+   * "Cancelar" pueda restaurarlo sin depender de recalcular nada.
+   */
+  const primaryKeyBeforeEditRef = useRef<{
+    readonly primaryKey: readonly ColumnName[]
+    readonly isConfirmed: boolean
+  }>({ primaryKey: [], isConfirmed: false })
+
   const parse = useParseSql()
   const schemaReview = useSchemaReview()
 
@@ -570,6 +579,13 @@ export function SqlUploadContainer() {
   function handleEditSuggestedPrimaryKey(
     columns: readonly ColumnName[],
   ) {
+    primaryKeyBeforeEditRef.current = {
+      primaryKey:
+        schemaReview.primaryKey,
+      isConfirmed:
+        schemaReview.isPrimaryKeyConfirmed,
+    }
+
     if (
       schemaReview.primaryKey
         .length === 0
@@ -628,15 +644,45 @@ export function SqlUploadContainer() {
   }
 
   function handleEditManualPrimaryKey() {
+    primaryKeyBeforeEditRef.current = {
+      primaryKey:
+        schemaReview.primaryKey,
+      isConfirmed:
+        schemaReview.isPrimaryKeyConfirmed,
+    }
+
     schemaReview.editPrimaryKey()
 
     setIsEditingPrimaryKey(true)
   }
 
   function handleEditGeneratedPrimaryKey() {
+    primaryKeyBeforeEditRef.current = {
+      primaryKey:
+        schemaReview.primaryKey,
+      isConfirmed:
+        schemaReview.isPrimaryKeyConfirmed,
+    }
+
     schemaReview.editPrimaryKey()
 
     setIsEditingPrimaryKey(true)
+  }
+
+  /**
+   * Sale del modo edición sin aplicar la selección en curso: restaura
+   * la PK exactamente como estaba antes de presionar "Corregir".
+   */
+  function handleCancelPrimaryKeyEdit() {
+    const snapshot =
+      primaryKeyBeforeEditRef.current
+
+    schemaReview.cancelPrimaryKeyEdit(
+      snapshot.primaryKey,
+      snapshot.isConfirmed,
+    )
+
+    setIsEditingPrimaryKey(false)
   }
 
   /*
@@ -846,37 +892,11 @@ export function SqlUploadContainer() {
                 }
               />
 
-              <FirstNormalFormAnalysis
-                analysis={
-                  firstNormalFormAnalysis
-                }
-                onTransformIssue={
-                  handleTransformFirstNormalFormIssue
-                }
-                canTransform={
-                  schemaReview.isPrimaryKeyConfirmed
-                }
-              />
-
-              {firstNormalFormTransformationError !==
-              null ? (
-                <div
-                  role="alert"
-                  className="rounded-lg border border-border bg-muted/40 px-3 py-2"
-                >
-                  <p className="text-xs font-medium text-foreground">
-                    No se pudo realizar la
-                    transformación de 1FN
-                  </p>
-
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {
-                      firstNormalFormTransformationError
-                    }
-                  </p>
-                </div>
-              ) : null}
-
+              {/*
+                Antes que "Transformar a 1FN": esa acción depende de
+                confirmar la clave, y el usuario debe ver el requisito
+                antes que la acción que lo exige.
+              */}
               {hasGeneratedFirstNormalFormPrimaryKey &&
               !isEditingPrimaryKey ? (
                 <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/40 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -998,7 +1018,43 @@ export function SqlUploadContainer() {
                   onConfirm={
                     handleConfirmManualPrimaryKey
                   }
+                  onCancel={
+                    isEditingPrimaryKey
+                      ? handleCancelPrimaryKeyEdit
+                      : undefined
+                  }
                 />
+              ) : null}
+
+              <FirstNormalFormAnalysis
+                analysis={
+                  firstNormalFormAnalysis
+                }
+                onTransformIssue={
+                  handleTransformFirstNormalFormIssue
+                }
+                canTransform={
+                  schemaReview.isPrimaryKeyConfirmed
+                }
+              />
+
+              {firstNormalFormTransformationError !==
+              null ? (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-border bg-muted/40 px-3 py-2"
+                >
+                  <p className="text-xs font-medium text-foreground">
+                    No se pudo realizar la
+                    transformación de 1FN
+                  </p>
+
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {
+                      firstNormalFormTransformationError
+                    }
+                  </p>
+                </div>
               ) : null}
 
               {/* Después del selector porque el
