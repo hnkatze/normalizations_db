@@ -110,6 +110,17 @@ export function stepBefore(step: WorkspaceStep): WorkspaceStep | null {
   return WORKSPACE_STEPS[index - 1] ?? null
 }
 
+/**
+ * `3NF` es el vocabulario del dominio; esto es el del usuario.
+ *
+ * Vive acá y no junto al tipo porque traducir es cosa de la interfaz, no del
+ * dominio. `stepLabel` la reutiliza para que la app no tenga dos ortografías
+ * de la misma forma normal.
+ */
+export function normalFormLabel(form: NormalForm): string {
+  return form.replace("NF", "FN")
+}
+
 /** `3NF` es el vocabulario del dominio; esto es el del usuario. */
 export function stepLabel(step: WorkspaceStep): string {
   switch (step) {
@@ -122,7 +133,7 @@ export function stepLabel(step: WorkspaceStep): string {
     case "1NF":
     case "2NF":
     case "3NF":
-      return step.replace("NF", "FN")
+      return normalFormLabel(step)
     default: {
       const unhandled: never = step
       throw new Error(`workspaceSteps: paso sin etiqueta ${String(unhandled)}`)

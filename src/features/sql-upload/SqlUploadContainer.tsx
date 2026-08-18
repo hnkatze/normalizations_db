@@ -8,9 +8,11 @@ import { analyzeParsedTable, type ParsedTableAnalysis } from "./analyzeParsedTab
 import { DependencyReview } from "./DependencyReview"
 import { resolveSelectedTable } from "./describeParsedTable"
 import { FlatTableOverview } from "./FlatTableOverview"
+import { classifyNormalForm } from "@/features/normalization"
 import { buildNormalizationGates } from "./normalizationGates"
 import { computeNormalizationOutcome } from "./normalizationOutcome"
 import { NormalizationGateChecklist } from "./NormalizationGateChecklist"
+import { NormalFormVerdictCard } from "./NormalFormVerdictCard"
 import { NormalizedSchemaSection } from "./NormalizedSchemaSection"
 import { ParsedSchemaOverview } from "./ParsedSchemaOverview"
 import { PrimaryKeySelector } from "./PrimaryKeySelector"
@@ -103,6 +105,24 @@ export function SqlUploadContainer() {
     hasSelectedTable: analysis !== null,
     isSchemaReady: schemaReview.primaryKey.length > 0 && confirmedDependencies.length > 0,
   }
+  // El veredicto es sobre los DATOS, no sobre el avance de la revisión: se
+  // calcula con las dependencias DETECTADAS y no con las confirmadas. Con las
+  // confirmadas, una tabla recién abierta —cero casillas marcadas— se
+  // declararía en 3FN, que es la respuesta correcta a la pregunta equivocada.
+  //
+  // No hace falta prefiltrar las vacuas: `classifyNormalForm` las descarta.
+  const verdict = useMemo(
+    () =>
+      analysis === null || schemaReview.primaryKey.length === 0
+        ? null
+        : classifyNormalForm({
+            table: { ...analysis.table, rows: [] },
+            primaryKey: schemaReview.primaryKey,
+            confirmedDependencies: analysis.detection.dependencies,
+          }),
+    [analysis, schemaReview.primaryKey],
+  )
+
   // Las tres etapas y su DDL se derivan una vez por cambio real, no en cada
   // renderizado. Estaba calculado en línea dentro del JSX, así que marcar una
   // casilla rehacía la descomposición completa —y, aguas abajo, obligaba a
@@ -306,6 +326,9 @@ export function SqlUploadContainer() {
                 selected={schemaReview.primaryKey}
                 onToggle={schemaReview.toggleKeyColumn}
               />
+              {/* Después del selector porque el diagnóstico depende de la
+                  clave: sin clave elegida no hay pregunta que contestar. */}
+              {verdict === null ? null : <NormalFormVerdictCard verdict={verdict} />}
             </div>
 
             <div>
