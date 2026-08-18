@@ -1,11 +1,17 @@
 # Handoff — estado del trabajo en curso
 
 Documento para retomar el trabajo en otra máquina o después de una pausa larga.
-Refleja el estado al **12 de agosto de 2026**, después de la tanda que dejó el
-recorrido funcionando de punta a punta y verificado en navegador.
+Refleja el estado al **18 de agosto de 2026**, después de la tanda que agregó el
+diagnóstico de forma normal, integró la rama de 1FN y automatización, y cerró
+tres bugs del motor.
 
-Rama de trabajo: `feature/normalization-workspace`. Va **16 commits adelante de
-`development` y sin divergencia**, así que entra con fast-forward.
+Rama de trabajo: `development`. `feature/normalization-workspace` ya está
+integrada y no se usa más.
+
+> El contexto largo de esta tanda está publicado como fichas en el context-board,
+> proyecto **`normalizations-db`**: el criterio de evidencia, el canonicalizador
+> único, las columnas derivadas, el diagnóstico, las claves alternativas
+> compuestas, el flujo automático y cómo levantar el proyecto.
 
 ---
 
@@ -34,7 +40,7 @@ se busque el error en el código de la aplicación, donde no está.
 
 ---
 
-## Qué se construyó en esta tanda
+## Qué se construyó en la tanda del 12 de agosto
 
 **El paso de carga real dejó de usar `/api/analyze` y ahora consume `/api/parse`.**
 Con eso, el andamiaje de `/esquema` cumplió su función y se borró.
@@ -120,6 +126,67 @@ llega, y reutiliza ese mismo mensaje a propósito: hay UNA sola redacción del p
 
 ---
 
+## Lo que se construyó en la tanda del 18 de agosto
+
+**La aplicación ahora emite un veredicto.** `classifyNormalForm` responde en qué forma
+normal está una tabla HOY y qué la saca de ahí, y la pantalla lo muestra en el paso 1FN.
+Antes, una tabla que ya estaba en 3FN mostraba dos etapas idénticas sin explicar por qué,
+y no había forma de distinguir eso de un error de la aplicación.
+
+Se calcula con las dependencias **detectadas**, no con las confirmadas: con las
+confirmadas, una tabla recién abierta se declararía en 3FN, que es la respuesta correcta
+a la pregunta equivocada.
+
+**El criterio de evidencia dejó de ser binario.** `isVacuous` sólo descartaba lo que nunca
+pudo fallar. Ahora `hasSolidEvidence` exige al menos 3 *oportunidades de refutación*
+(`rowCount - groupCount`): filas que cayeron sobre un valor de determinante ya visto y
+podrían haber roto la regla. El umbral salió de medir tres archivos reales, no de
+elegirlo — las reglas legítimas quedan en 17, 22 y 4; las coincidencias de una tabla de
+siete filas, en 1 y 2.
+
+**Se integró `feature/complete-1nf-and-fd-automation`** (de Beyson): 1FN de verdad
+—grupos repetitivos y arrays JSON, que el proyecto antes daba por resueltos—, la clave
+primaria leída del `CREATE TABLE` con botón "Confirmar clave", y la clasificación
+automática de dependencias en cuatro baldes. Un solo conflicto, en `SqlUploadContainer`.
+
+**Tres bugs del motor, cerrados:**
+
+| Qué pasaba | Arreglo |
+|---|---|
+| El motor abortaba con "foreign-key cycle" ante entrada legítima | Reconocer claves alternativas con determinante compuesto |
+| Dos canonicalizadores con criterios de desempate distintos | Uno solo, en el motor, y recibe la clave primaria |
+| La automatización fabricaba una tabla `subtotal` | `detectDerivedColumns`: lo calculado no es una entidad |
+
+Y una inconsistencia que apareció al probar: el diagnóstico y el clasificador automático
+usaban criterios de evidencia distintos, así que la app llegaba a decir "esta tabla ya
+está en 3FN" y descomponerla igual en tres tablas.
+
+### Estado verificado en Chrome
+
+| Archivo | Veredicto | 3FN |
+|---|---|---|
+| `ventas_raw` (semilla) | 1FN | 6 tablas — el answer key exacto |
+| `Customers` (Northwind) | 2FN | Customers · City · PostalCode |
+| `empleado` | 3FN | 1 tabla |
+| `Categories` (Northwind) | 3FN | 1 tabla |
+
+Lo que la aplicación dice y lo que hace coinciden en los cuatro.
+
+### Decisiones abiertas de esta tanda
+
+**Los porcentajes no se detectan.** `detectDerivedColumns` cubre producto y suma de dos
+columnas —y de arrastre resta y división, que son las mismas leídas al revés— pero no
+`iva = base * 0.15`, ni fórmulas de tres operandos, ni concatenación de texto. El
+porcentaje aparece en cualquier volcado de facturación y hoy pasa derecho a
+preseleccionarse. Ampliar tiene precio: cuantas más formas se prueban, más columnas se
+marcan por casualidad.
+
+**El tratamiento sigue mezclado.** `UploadHero` habla de usted y el resto de la
+aplicación vosea. Elegir uno y aplicarlo entero; la mitad es peor que cualquiera de
+los dos.
+
+---
+
 ## Lo que está pendiente y bloquea
 
 ### 1. Vercel sí sirve `api/*.py` en un proyecto Next.js (RESUELTO)
@@ -147,18 +214,12 @@ Queda una pregunta menor sin cerrar: si los módulos de `api/_sqlparse/` se conv
 funciones propias. La convención del guion bajo dice que no, pero la documentación no lo
 afirma. Se ve en la lista de funciones del despliegue.
 
-### 2. `/api/analyze` y `src/features/staging/` ya se pueden borrar
+### 2. `/api/analyze` y `src/features/staging/` (RESUELTO)
 
-Ninguna pantalla los llama, y la red de seguridad que justificaba dejarlos en pie
-—la duda sobre Python en Vercel— acaba de despejarse. **Se borran juntos**: la ruta,
-`analyzeContract.ts`, `parseAnalyzeResponse.ts` y toda la carpeta `staging/`, con lo que
-se van también la dependencia de PostgreSQL y `DATABASE_URL`.
+Borrados: la ruta, `analyzeContract.ts`, `parseAnalyzeResponse.ts` y toda la carpeta
+`staging/`. Con ellos se fueron las dependencias `pg` y `@types/pg`, y `DATABASE_URL`
+dejó de tener uso en el proyecto. 23 archivos, −1359 líneas.
 
-`StagingPort` era la abstracción equivocada para un parser, pero ya no hay que
-rediseñarla: hay que eliminarla.
-
-`StagingPort` era la abstracción equivocada para un parser, pero ya no hay que rediseñarla:
-no hay que reemplazarla por un puerto mejor, hay que eliminarla.
 
 ### 3. El recorrido está verificado de punta a punta (RESUELTO)
 
@@ -193,9 +254,13 @@ console.log('sobrante:', d.scrollHeight - d.clientHeight, 'px');
 
 ### 5. Varias tablas de punta a punta (parcial)
 
-Ya se puede elegir **cuál** tabla se normaliza, y volver a elegir otra. Lo que falta es
-el nivel de esquema: el grafo de claves foráneas —`ParsedTable.foreignKeys` ya las trae,
-nadie las usa todavía— y un informe global. Se dejó fuera del MVP a propósito.
+Ya se puede elegir **cuál** tabla se normaliza, y volver a elegir otra. Cada tabla se
+diagnostica sola con `classifyNormalForm`, que es puro y por-tabla: diagnosticar el
+archivo entero es un `map` sobre sus tablas.
+
+Lo que falta sigue siendo el nivel de esquema: el grafo de claves foráneas
+—`ParsedTable.foreignKeys` ya las trae, nadie las usa todavía— y un informe global.
+
 
 ### 6. Decisión abierta: ¿el stepper se elimina de toda la app? (previo)
 
@@ -340,7 +405,7 @@ directorios vendorizados. Filtrar con `rg`, o correr el build en su propio coman
 
 ```bash
 npx tsc --noEmit     # limpio
-npx vitest run       # 247 pruebas
+npx vitest run       # 295 pruebas
 npx eslint src       # limpio
 npx next build       # compila
 npm run walkthrough  # recorre la app en Chrome y deja capturas en .walkthrough/
@@ -351,7 +416,7 @@ falla, así que sirve como comprobación y no solo como paseo.
 
 **`npx eslint api` falla**: eslint no tiene configuración para `.py`. Lintear solo `src`.
 
-Estado al momento de escribir esto: las cuatro pasan en verde.
+Estado al momento de escribir esto: las cinco pasan en verde.
 
 Un `PostToolUse` hook typechequea cada archivo `.ts`/`.tsx` al escribirlo. Su silencio
 significa "no se chequeó", no "está limpio".
@@ -387,8 +452,17 @@ commit de merge del PR #1. Hace falta un merge normal.
 
 ## Memoria persistente
 
-El contexto de este trabajo está en Engram bajo el proyecto **`normalizations_db`**, en los
-temas `normalizer/input-layer`, `normalizer/local-setup`, `normalizer/parse-service` y
+El contexto de este trabajo vive en dos lados.
+
+**Context-board** (compartido, llega a cualquier máquina): proyecto `normalizations-db`,
+con fichas sobre el criterio de evidencia, el canonicalizador único, las columnas
+derivadas, el diagnóstico de forma normal, las claves alternativas compuestas, el flujo
+automático y cómo levantar el proyecto.
+
+**Engram** (local), bajo el proyecto **`normalizations_db`**, en los temas
+`normalizer/input-layer`, `normalizer/local-setup`, `normalizer/parse-service`,
+`normalizer/normal-form-diagnosis`, `normalizer/vacuous-fd-noise`,
+`normalizer/three-fixes-after-merge`, `git/merge-beyson-1nf-automation` y
 `deploy/vercel-framework-preset`.
 
 Ojo: si se abre una sesión desde otro directorio, Engram deriva el proyecto del nombre de
