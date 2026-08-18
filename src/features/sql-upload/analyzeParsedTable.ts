@@ -1,14 +1,16 @@
-import type { DetectionResult, FlatTable, ParsedTable } from "@/domain"
+import type {
+  DetectionResult,
+  FlatTable,
+  ParsedTable,
+} from "@/domain"
+
 import { toFlatTable } from "@/domain"
 import { detectFunctionalDependencies } from "@/features/fd-detection"
 
 /**
  * Hasta dos columnas por determinante.
  *
- * El espacio de candidatos crece de forma combinatoria con este número, y una
- * dependencia de tres columnas casi siempre es ruido que el usuario tendría
- * que descartar a mano. Era el tope que ya usaba el análisis del servidor;
- * moverlo acá no lo cambia.
+ * El espacio de candidatos crece de forma combinatoria con este número.
  */
 export const MAX_DETERMINANT_SIZE = 2
 
@@ -18,16 +20,39 @@ export type ParsedTableAnalysis = {
 }
 
 /**
- * Analiza UNA tabla del archivo leído, en el navegador.
+ * Analiza directamente una tabla plana.
  *
- * El análisis dejó de necesitar servidor: antes el archivo se ejecutaba contra
- * PostgreSQL y las dependencias salían de ahí, pero el detector solo necesita
- * columnas y filas, y ambas ya vienen dentro del archivo parseado.
+ * Esta función es necesaria porque después de una transformación
+ * de 1FN ya no trabajamos únicamente con la ParsedTable original
+ * proveniente del archivo SQL.
  */
-export function analyzeParsedTable(table: ParsedTable): ParsedTableAnalysis {
-  const flat = toFlatTable(table)
+export function analyzeFlatTable(
+  table: FlatTable,
+): ParsedTableAnalysis {
   return {
-    table: flat,
-    detection: detectFunctionalDependencies(flat, { maxDeterminantSize: MAX_DETERMINANT_SIZE }),
+    table,
+
+    detection:
+      detectFunctionalDependencies(
+        table,
+        {
+          maxDeterminantSize:
+            MAX_DETERMINANT_SIZE,
+        },
+      ),
   }
+}
+
+/**
+ * Analiza una tabla obtenida directamente del parser SQL.
+ *
+ * Primero la convierte al modelo FlatTable y después utiliza
+ * exactamente el mismo análisis que una tabla transformada.
+ */
+export function analyzeParsedTable(
+  table: ParsedTable,
+): ParsedTableAnalysis {
+  return analyzeFlatTable(
+    toFlatTable(table),
+  )
 }

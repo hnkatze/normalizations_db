@@ -1,33 +1,40 @@
 import type { ColumnName, FunctionalDependency } from "@/domain"
 import { isVacuous } from "@/domain"
 
-/**
- * Una clave primaria propuesta a partir de evidencia observada, nunca de
- * una regla de negocio. Los llamadores deben presentar esto como una
- * sugerencia de un solo clic que el usuario aplica explícitamente (ver
- * `PrimaryKeySuggestion`) — nunca aplicarla en silencio.
- */
 export type PrimaryKeySuggestion =
-  | { readonly kind: "suggested"; readonly columns: readonly ColumnName[] }
+  | {
+      readonly kind: "suggested"
+      readonly columns: readonly ColumnName[]
+      readonly source: "declared" | "inferred"
+    }
   | { readonly kind: "none" }
 
 /**
- * Propone una clave primaria a partir de la detección de dependencias ya encontrada.
+ * Propone una clave primaria para la relación.
  *
- * `FdEvidence.maxGroupSize === 1` (equivalente a `isVacuous`, ver la nota
- * TRAP en `@/domain/functionalDependency`) significa que cada valor de ese
- * determinante ocurrió exactamente una vez en la muestra — el determinante
- * es único, que es exactamente la definición de una clave candidata. Entre
- * todos esos determinantes se propone el más pequeño, ya que una clave más
- * pequeña es la afirmación más fuerte; los empates se resuelven por las
- * posiciones de las columnas en `columnOrder` para que la elección nunca
- * dependa del orden de iteración de arrays/objetos y se mantenga estable
- * entre renderizados del mismo resultado de detección.
+ * Prioridad:
+ * 1. Utilizar la clave primaria declarada en el archivo SQL, si existe
+ *    y todas sus columnas pertenecen a la tabla.
+ * 2. Si el archivo no declara una PK válida, inferir una clave candidata
+ *    utilizando la unicidad observada en los datos.
  */
 export function suggestPrimaryKey(
+  declaredPrimaryKey: readonly ColumnName[],
   dependencies: readonly FunctionalDependency[],
   columnOrder: readonly ColumnName[],
 ): PrimaryKeySuggestion {
+  const validDeclaredPrimaryKey =
+    declaredPrimaryKey.length > 0 &&
+    declaredPrimaryKey.every((column) => columnOrder.includes(column))
+
+  if (validDeclaredPrimaryKey) {
+    return {
+      kind: "suggested",
+      columns: declaredPrimaryKey,
+      source: "declared",
+    }
+  }
+
   const uniqueDeterminants = dependencies
     .filter((dependency) => isVacuous(dependency.evidence))
     .map((dependency) => dependency.determinant)
@@ -40,6 +47,7 @@ export function suggestPrimaryKey(
     (min, determinant) => Math.min(min, determinant.length),
     Number.POSITIVE_INFINITY,
   )
+
   const smallestCandidates = uniqueDeterminants.filter(
     (determinant) => determinant.length === smallestSize,
   )
@@ -48,15 +56,13 @@ export function suggestPrimaryKey(
     compareBySourceOrder(candidate, best, columnOrder) < 0 ? candidate : best,
   )
 
-  return { kind: "suggested", columns: winner }
+  return {
+    kind: "suggested",
+    columns: winner,
+    source: "inferred",
+  }
 }
 
-/**
- * Ordena dos determinantes del mismo tamaño según las posiciones de sus
- * columnas en `columnOrder`, con la posición más pequeña primero. Una
- * columna ausente de `columnOrder` se ordena al final para que una columna
- * inesperada/desconocida nunca gane un empate por accidente.
- */
 function compareBySourceOrder(
   a: readonly ColumnName[],
   b: readonly ColumnName[],
@@ -68,11 +74,18 @@ function compareBySourceOrder(
   for (let position = 0; position < sortedA.length; position += 1) {
     const indexA = sortedA.at(position)
     const indexB = sortedB.at(position)
-    if (indexA === undefined || indexB === undefined || indexA === indexB) {
+
+    if (
+      indexA === undefined ||
+      indexB === undefined ||
+      indexA === indexB
+    ) {
       continue
     }
+
     return indexA - indexB
   }
+
   return 0
 }
 
