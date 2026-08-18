@@ -10,6 +10,8 @@ import type {
   FirstNormalFormIssue,
 } from "./analyzeFirstNormalForm"
 
+import { describeFirstNormalFormTransformGuidance } from "./describeFirstNormalFormTransformGuidance"
+
 type FirstNormalFormAnalysisProps = {
   readonly analysis: FirstNormalFormAnalysisValue
 
@@ -149,6 +151,19 @@ function IssueCard({
     const issue =
       displayIssue.issue
 
+    const repeatingGroupGuidance =
+      describeFirstNormalFormTransformGuidance(
+        {
+          isTransformOffered:
+            onTransformIssue !==
+            undefined,
+          isAutomaticallySupported:
+            true,
+          isPrimaryKeyConfirmed:
+            canTransform,
+        },
+      )
+
     return (
       <div className="rounded-lg border border-border bg-muted/40 px-3 py-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -193,7 +208,8 @@ function IssueCard({
           ) : null}
         </div>
 
-        {!canTransform ? (
+        {repeatingGroupGuidance ===
+        "confirm-primary-key" ? (
           <p className="mt-2 text-xs text-muted-foreground">
             Confirme primero la clave
             primaria para poder realizar
@@ -210,6 +226,18 @@ function IssueCard({
   const isAutomaticallySupported =
     issue.reason ===
     "json-array"
+
+  const nonAtomicValueGuidance =
+    describeFirstNormalFormTransformGuidance(
+      {
+        isTransformOffered:
+          onTransformIssue !==
+          undefined,
+        isAutomaticallySupported,
+        isPrimaryKeyConfirmed:
+          canTransform,
+      },
+    )
 
   return (
     <div className="rounded-lg border border-border bg-muted/40 px-3 py-3">
@@ -278,8 +306,8 @@ function IssueCard({
         ) : null}
       </div>
 
-      {isAutomaticallySupported &&
-      !canTransform ? (
+      {nonAtomicValueGuidance ===
+      "confirm-primary-key" ? (
         <p className="mt-2 text-xs text-muted-foreground">
           Confirme primero la clave
           primaria para poder realizar la
@@ -287,7 +315,8 @@ function IssueCard({
         </p>
       ) : null}
 
-      {!isAutomaticallySupported ? (
+      {nonAtomicValueGuidance ===
+      "manual-review-required" ? (
         <p className="mt-2 text-xs text-muted-foreground">
           Esta estructura necesita
           revisión manual antes de poder
