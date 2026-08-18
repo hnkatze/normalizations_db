@@ -210,8 +210,57 @@ function findReciprocalPairs(
  */
 export type NormalizationStages = readonly [NormalizedSchema, NormalizedSchema, NormalizedSchema]
 
+
+/**
+ * Descarta la dirección redundante cuando un determinante COMPUESTO y una
+ * sola columna son claves alternativas la una de la otra.
+ *
+ * `findReciprocalPairs` cubre el caso de dos columnas sueltas (`{A}->B` y
+ * `{B}->A`). Falta el mismo fenómeno con más columnas de un lado: si `dir`
+ * determina `oficio` y `comision`, y el par `(oficio, comision)` determina
+ * `dir`, las dos expresiones identifican a la MISMA entidad. Conservar ambas
+ * direcciones crea dos tablas que se referencian mutuamente, y el motor
+ * abortaba con la invariante de ciclos ante una entrada que el usuario podía
+ * confirmar legítimamente.
+ *
+ * Se conserva la clave más simple. Una entidad identificada por una columna no
+ * gana nada expresándose como un par, y elegir por cardinalidad es
+ * determinista: no depende del orden del arreglo de dependencias.
+ */
+function dropRedundantCompositeAlternateKeys(
+  dependencies: readonly FunctionalDependency[],
+): readonly FunctionalDependency[] {
+  const dependentsOf = new Map<ColumnName, Set<ColumnName>>()
+  for (const dependency of dependencies) {
+    if (dependency.determinant.length !== 1) {
+      continue
+    }
+    const determinantColumn = dependency.determinant.at(0)
+    if (determinantColumn === undefined) {
+      continue
+    }
+    const existing = dependentsOf.get(determinantColumn) ?? new Set<ColumnName>()
+    existing.add(dependency.dependent)
+    dependentsOf.set(determinantColumn, existing)
+  }
+
+  return dependencies.filter((dependency) => {
+    if (dependency.determinant.length <= 1) {
+      return true
+    }
+    // ¿El dependiente determina, él solo, a todo su propio determinante?
+    // Entonces ambos lados nombran la misma entidad y este es el lado largo.
+    const reachedByDependent = dependentsOf.get(dependency.dependent)
+    if (reachedByDependent === undefined) {
+      return true
+    }
+    return !dependency.determinant.every((column) => reachedByDependent.has(column))
+  })
+}
+
 function runNormalizationStages(input: NormalizationInput): NormalizationStages {
-  const { table, confirmedDependencies, primaryKey } = input
+  const { table, primaryKey } = input
+  const confirmedDependencies = dropRedundantCompositeAlternateKeys(input.confirmedDependencies)
   const allColumns = columnNamesOf(table)
   const primaryKeySet = new Set(primaryKey)
 
