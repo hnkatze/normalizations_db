@@ -2,82 +2,321 @@
 
 import { useState } from "react"
 
-import type { ColumnName, FdDecision, FunctionalDependency, ReviewedDependency } from "@/domain"
+import type {
+  ColumnName,
+  FdDecision,
+  FunctionalDependency,
+  ReviewedDependency,
+} from "@/domain"
+
+import {
+  applyFunctionalDependencySuggestion,
+} from "./applyFunctionalDependencySuggestion"
+
 import {
   buildInitialReview,
   setDependenciesDecision,
   toggleConfirmed,
 } from "./reviewedDependencies"
 
+import type {
+  FunctionalDependencySuggestion,
+} from "./suggestFunctionalDependencies"
+
 type SchemaReview = {
-  readonly primaryKey: readonly ColumnName[]
-  /** Texto para una región activa que anuncia la última sugerencia aplicada mediante `applySuggestedPrimaryKey`. */
-  readonly primaryKeyAnnouncement: string
-  readonly reviewed: readonly ReviewedDependency[]
-  readonly toggleKeyColumn: (column: ColumnName) => void
-  readonly applySuggestedPrimaryKey: (columns: readonly ColumnName[]) => void
-  readonly toggleConfirmedDependency: (dependency: FunctionalDependency) => void
-  /** Lleva todas las dependencias de un determinante al mismo estado de una sola vez. */
+  readonly primaryKey:
+    readonly ColumnName[]
+
+  readonly isPrimaryKeyConfirmed:
+    boolean
+
+  readonly primaryKeyAnnouncement:
+    string
+
+  readonly reviewed:
+    readonly ReviewedDependency[]
+
+  readonly toggleKeyColumn: (
+    column: ColumnName,
+  ) => void
+
+  readonly applySuggestedPrimaryKey: (
+    columns:
+      readonly ColumnName[],
+  ) => void
+
+  readonly confirmPrimaryKey: (
+    columns?:
+      readonly ColumnName[],
+  ) => void
+
+  readonly editPrimaryKey:
+    () => void
+
+  readonly toggleConfirmedDependency: (
+    dependency:
+      FunctionalDependency,
+  ) => void
+
   readonly setGroupDecision: (
-    dependencies: readonly FunctionalDependency[],
+    dependencies:
+      readonly FunctionalDependency[],
     decision: FdDecision,
   ) => void
-  readonly startReview: (dependencies: readonly FunctionalDependency[]) => void
+
+  readonly applyDependencySuggestion: (
+    suggestion:
+      FunctionalDependencySuggestion,
+  ) => void
+
+  readonly startReview: (
+    dependencies:
+      readonly FunctionalDependency[],
+  ) => void
 }
 
 /**
- * Estado local de revisión para una tabla analizada: la clave primaria que
- * el usuario eligió y su decisión de confirmación/pendiente sobre cada
- * dependencia detectada.
+ * Mantiene el estado de revisión del esquema:
  *
- * `startReview` se invoca desde el manejador de eventos que acaba de recibir
- * un análisis nuevo, no desde un efecto que reacciona a él — que la tabla
- * analizada cambie es un evento discreto, no una prop a la que este estado
- * deba sincronizarse silenciosamente.
+ * - clave primaria seleccionada;
+ * - confirmación explícita de la PK;
+ * - dependencias funcionales revisadas;
+ * - aplicación de propuestas automáticas.
+ *
+ * Una nueva tabla o una transformación estructural
+ * debe iniciar una revisión nueva mediante startReview.
  */
-export function useSchemaReview(): SchemaReview {
-  const [primaryKey, setPrimaryKey] = useState<readonly ColumnName[]>([])
-  const [primaryKeyAnnouncement, setPrimaryKeyAnnouncement] = useState("")
-  const [reviewed, setReviewed] = useState<readonly ReviewedDependency[]>([])
+export function useSchemaReview():
+  SchemaReview {
+  const [
+    primaryKey,
+    setPrimaryKey,
+  ] = useState<
+    readonly ColumnName[]
+  >([])
 
-  function toggleKeyColumn(column: ColumnName) {
-    setPrimaryKey((current) =>
-      current.includes(column) ? current.filter((selected) => selected !== column) : [...current, column],
+  const [
+    isPrimaryKeyConfirmed,
+    setIsPrimaryKeyConfirmed,
+  ] = useState(false)
+
+  const [
+    primaryKeyAnnouncement,
+    setPrimaryKeyAnnouncement,
+  ] = useState("")
+
+  const [
+    reviewed,
+    setReviewed,
+  ] = useState<
+    readonly ReviewedDependency[]
+  >([])
+
+  /**
+   * Permite corregir manualmente la PK.
+   *
+   * Cualquier cambio invalida su confirmación
+   * anterior porque ahora representa una
+   * selección diferente.
+   */
+  function toggleKeyColumn(
+    column: ColumnName,
+  ) {
+    setPrimaryKey(
+      (current) =>
+        current.includes(column)
+          ? current.filter(
+              (selected) =>
+                selected !== column,
+            )
+          : [
+              ...current,
+              column,
+            ],
+    )
+
+    setIsPrimaryKeyConfirmed(
+      false,
     )
   }
 
-  function applySuggestedPrimaryKey(columns: readonly ColumnName[]) {
+  /**
+   * Aplica una PK sugerida por el sistema.
+   *
+   * La sugerencia NO queda confirmada
+   * automáticamente: el usuario todavía debe
+   * aceptar o corregirla.
+   */
+  function applySuggestedPrimaryKey(
+    columns:
+      readonly ColumnName[],
+  ) {
     setPrimaryKey(columns)
-    // Las casillas de PrimaryKeySelector se marcan en silencio para un
-    // usuario de lector de pantalla: esta es la única retroalimentación de
-    // que la acción realmente hizo algo.
-    setPrimaryKeyAnnouncement(`Clave primaria establecida en ${columns.join(", ")}.`)
+
+    setIsPrimaryKeyConfirmed(
+      false,
+    )
+
+    setPrimaryKeyAnnouncement(
+      `Clave primaria sugerida: ${columns.join(", ")}. Confirme o corrija la selección.`,
+    )
   }
 
-  function toggleConfirmedDependency(dependency: FunctionalDependency) {
-    setReviewed((current) => toggleConfirmed(current, dependency))
+  /**
+   * Confirma la PK actual.
+   *
+   * Opcionalmente permite establecer y confirmar
+   * una nueva selección en la misma acción.
+   *
+   * Esto es útil después de una transformación
+   * automática de 1FN, donde la PK puede ampliarse.
+   */
+  function confirmPrimaryKey(
+    columns?:
+      readonly ColumnName[],
+  ) {
+    const confirmedColumns =
+      columns ?? primaryKey
+
+    if (
+      confirmedColumns.length ===
+      0
+    ) {
+      return
+    }
+
+    if (
+      columns !== undefined
+    ) {
+      setPrimaryKey(columns)
+    }
+
+    setIsPrimaryKeyConfirmed(
+      true,
+    )
+
+    setPrimaryKeyAnnouncement(
+      `Clave primaria confirmada: ${confirmedColumns.join(", ")}.`,
+    )
   }
 
+  /**
+   * Regresa la PK al estado editable sin
+   * eliminar la selección actual.
+   */
+  function editPrimaryKey() {
+    setIsPrimaryKeyConfirmed(
+      false,
+    )
+
+    setPrimaryKeyAnnouncement(
+      "La clave primaria puede corregirse.",
+    )
+  }
+
+  /**
+   * Alterna una dependencia individual entre
+   * pendiente y confirmada.
+   */
+  function toggleConfirmedDependency(
+    dependency:
+      FunctionalDependency,
+  ) {
+    setReviewed(
+      (current) =>
+        toggleConfirmed(
+          current,
+          dependency,
+        ),
+    )
+  }
+
+  /**
+   * Aplica una decisión común a todas las
+   * dependencias de un mismo determinante.
+   */
   function setGroupDecision(
-    dependencies: readonly FunctionalDependency[],
+    dependencies:
+      readonly FunctionalDependency[],
     decision: FdDecision,
   ) {
-    setReviewed((current) => setDependenciesDecision(current, dependencies, decision))
+    setReviewed(
+      (current) =>
+        setDependenciesDecision(
+          current,
+          dependencies,
+          decision,
+        ),
+    )
   }
 
-  function startReview(dependencies: readonly FunctionalDependency[]) {
+  /**
+   * Aplica la clasificación automática de
+   * dependencias funcionales:
+   *
+   * sugeridas -> confirmed
+   * sin evidencia -> discarded
+   * ambiguas -> pending
+   * deducidas -> pending
+   */
+  function applyDependencySuggestion(
+    suggestion:
+      FunctionalDependencySuggestion,
+  ) {
+    setReviewed(
+      (current) =>
+        applyFunctionalDependencySuggestion(
+          current,
+          suggestion,
+        ),
+    )
+  }
+
+  /**
+   * Inicia completamente una nueva revisión.
+   *
+   * Se utiliza cuando cambia la tabla analizada,
+   * incluyendo transformaciones estructurales de 1FN.
+   *
+   * Las decisiones anteriores no deben sobrevivir
+   * porque pertenecían a otro esquema.
+   */
+  function startReview(
+    dependencies:
+      readonly FunctionalDependency[],
+  ) {
     setPrimaryKey([])
-    setReviewed(buildInitialReview(dependencies))
+
+    setIsPrimaryKeyConfirmed(
+      false,
+    )
+
+    setPrimaryKeyAnnouncement(
+      "",
+    )
+
+    setReviewed(
+      buildInitialReview(
+        dependencies,
+      ),
+    )
   }
 
   return {
     primaryKey,
+    isPrimaryKeyConfirmed,
     primaryKeyAnnouncement,
     reviewed,
+
     toggleKeyColumn,
     applySuggestedPrimaryKey,
+    confirmPrimaryKey,
+    editPrimaryKey,
+
     toggleConfirmedDependency,
     setGroupDecision,
+    applyDependencySuggestion,
+
     startReview,
   }
 }

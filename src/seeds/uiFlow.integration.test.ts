@@ -23,14 +23,22 @@ describe("the flow a user actually walks", () => {
   })
 
   it("suggests the correct primary key from evidence alone", () => {
-    const suggestion = suggestPrimaryKey(detection.dependencies, columnNamesOf(ventasRawFixture))
+    const suggestion = suggestPrimaryKey(
+  [],
+  detection.dependencies,
+  columnNamesOf(ventasRawFixture)
+)
     expect(suggestion.kind).toBe("suggested")
     if (suggestion.kind !== "suggested") return
     expect([...suggestion.columns].sort()).toEqual(["producto_id", "venta_id"])
   })
 
   it("produces a schema once the suggestion is applied and dependencies confirmed", () => {
-    const suggestion = suggestPrimaryKey(detection.dependencies, columnNamesOf(ventasRawFixture))
+    const suggestion = suggestPrimaryKey(
+  [],
+  detection.dependencies,
+  columnNamesOf(ventasRawFixture)
+)
     expect(suggestion.kind).toBe("suggested")
     if (suggestion.kind !== "suggested") return
 
@@ -107,7 +115,11 @@ describe("the flow a user actually walks", () => {
     // transitiva se mueve en 3FN, así que 2FN no tiene nada que hacer. Lo que
     // faltaba no era arreglar el motor sino que la pantalla lo dijera, y esto
     // fija que el caso "no cambió nada" es real y detectable.
-    const suggestion = suggestPrimaryKey(detection.dependencies, columnNamesOf(ventasRawFixture))
+    const suggestion = suggestPrimaryKey(
+  [],
+  detection.dependencies,
+  columnNamesOf(ventasRawFixture)
+)
     expect(suggestion.kind).toBe("suggested")
     if (suggestion.kind !== "suggested") return
 
