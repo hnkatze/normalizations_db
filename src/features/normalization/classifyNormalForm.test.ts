@@ -163,6 +163,26 @@ describe("classifyNormalForm", () => {
     expect(verdict.violations).toEqual([])
   })
 
+  it("una coincidencia de una tabla diminuta no cuenta como violación", () => {
+    // El caso real de `empleado`: 7 filas, y `{dir} -> oficio` se cumple
+    // porque dos personas de León resultaron ser vendedoras. La tabla ya
+    // está en 3FN y declararla en 2FN por esto sería mentirle al usuario.
+    const verdict = classifyNormalForm({
+      table: tableOf("codigo_c", "dir", "oficio"),
+      confirmedDependencies: [
+        {
+          determinant: ["dir"],
+          dependent: "oficio",
+          evidence: { groupCount: 6, rowCount: 7, maxGroupSize: 2, isTrivial: false },
+        },
+      ],
+      primaryKey: ["codigo_c"],
+    })
+
+    expect(verdict.normalForm).toBe("3NF")
+    expect(verdict.violations).toEqual([])
+  })
+
   it("una dependencia sin evidencia no cuenta como violación", () => {
     // Con 12 filas y 12 valores distintos, ninguna fila pudo contradecirla:
     // no es evidencia de una regla del dominio, y descomponer por ella

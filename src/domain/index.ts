@@ -22,7 +22,12 @@ export type {
   FunctionalDependency,
   ReviewedDependency,
 } from "./functionalDependency"
-export { isVacuous } from "./functionalDependency"
+export {
+  hasSolidEvidence,
+  isVacuous,
+  MIN_REFUTATION_OPPORTUNITIES,
+  refutationOpportunities,
+} from "./functionalDependency"
 
 export type {
   Displacement,

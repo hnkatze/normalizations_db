@@ -69,6 +69,41 @@ export function isVacuous(evidence: FdEvidence): boolean {
   return evidence.maxGroupSize <= 1
 }
 
+/**
+ * Cuántas filas pudieron contradecir la regla y no lo hicieron.
+ *
+ * Cada valor del determinante que aparece por primera vez no prueba nada: la
+ * regla todavía no tuvo ocasión de fallar. Recién la SEGUNDA fila con ese
+ * mismo valor puede desmentirla. `rowCount - groupCount` cuenta exactamente
+ * esas filas, y es la medida honesta de cuánta evidencia hay detrás.
+ */
+export function refutationOpportunities(evidence: FdEvidence): number {
+  return evidence.rowCount - evidence.groupCount
+}
+
+/**
+ * El mínimo para hablar de un patrón en lugar de una coincidencia.
+ *
+ * Medido contra tres archivos reales: las reglas legítimas quedan cómodamente
+ * arriba (la más floja de la semilla de referencia tiene 17 oportunidades;
+ * `{PostalCode} -> City` de Northwind tiene 4) y las coincidencias de una
+ * tabla de siete filas quedan abajo (`{dir} -> oficio` tiene 1). El corte cae
+ * en el hueco que separa a unas de otras, no en un número elegido de antemano.
+ */
+export const MIN_REFUTATION_OPPORTUNITIES = 3
+
+/**
+ * Verdadero cuando la regla se sostiene sobre suficientes filas como para
+ * tomarla en serio.
+ *
+ * Es más exigente que `!isVacuous`, que solo descarta lo que NUNCA pudo
+ * fallar. Una regla corroborada por una sola fila tampoco es evidencia, y
+ * descomponer por ella fabrica tablas que los datos no piden.
+ */
+export function hasSolidEvidence(evidence: FdEvidence): boolean {
+  return refutationOpportunities(evidence) >= MIN_REFUTATION_OPPORTUNITIES
+}
+
 /** El veredicto del usuario sobre una dependencia detectada. La detección solo propone. */
 export type FdDecision = "pending" | "confirmed" | "discarded"
 

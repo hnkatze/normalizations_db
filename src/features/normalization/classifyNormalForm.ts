@@ -14,7 +14,7 @@
  */
 
 import type { ColumnName, FunctionalDependency, NormalForm, NormalizationInput } from "@/domain"
-import { columnNamesOf, isVacuous } from "@/domain"
+import { columnNamesOf, hasSolidEvidence } from "@/domain"
 
 import { createCanonicalizer } from "./normalizeTo3NF"
 
@@ -57,10 +57,12 @@ export function classifyNormalForm(input: NormalizationInput): NormalFormVerdict
   }
 
   function violationOf(dependency: FunctionalDependency): NormalFormViolation | null {
-    // Sin evidencia no hay regla que respetar. Cada valor del determinante
-    // aparece una sola vez, así que ninguna fila pudo contradecirla: descomponer
-    // por ella fabricaría una tabla que los datos no piden.
-    if (isVacuous(dependency.evidence)) {
+    // Sin evidencia suficiente no hay regla que respetar. No alcanza con que
+    // la dependencia se cumpla: tiene que haberse podido romper. Una tabla de
+    // siete filas produce coincidencias —"vivir en León determina ser
+    // vendedor"— que se cumplen y no significan nada, y descomponer por ellas
+    // fabrica tablas que los datos no piden.
+    if (!hasSolidEvidence(dependency.evidence)) {
       return null
     }
     // Una columna de la clave nunca se desplaza, así que nada de lo que la
