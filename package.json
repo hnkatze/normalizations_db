@@ -10,7 +10,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:parser": "python -m pytest api"
   },
   "dependencies": {
     "@vercel/config": "^0.5.6",

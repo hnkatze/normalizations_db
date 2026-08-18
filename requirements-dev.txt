@@ -1,0 +1,5 @@
+# Dependencias de DESARROLLO del servicio de parseo. Deliberadamente separadas de
+# `requirements.txt`: Vercel lee ese archivo para las funciones serverless y una
+# dependencia de framework ahí cambia el preset y hace desaparecer `/api`.
+-r requirements.txt
+pytest==8.4.2

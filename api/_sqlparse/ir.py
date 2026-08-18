@@ -59,6 +59,8 @@ def build_ir(raw: bytes) -> dict[str, Any]:
             elif isinstance(parsed, exp.Alter):
                 _apply_alter(parsed, tables)
 
+    _resolve_reference_columns(tables)
+
     for name, table in tables.items():
         table["rows"] = rows.get(name, [])
 
@@ -95,6 +97,9 @@ def _read_create_table(node: exp.Create) -> dict[str, Any] | None:
             )
             if any(isinstance(c.kind, exp.PrimaryKeyColumnConstraint) for c in definition.constraints):
                 primary_key.append(definition.name)
+            for constraint in definition.constraints:
+                if isinstance(constraint.kind, exp.Reference):
+                    foreign_keys.append(_read_column_reference(definition.name, constraint.kind))
         elif isinstance(definition, exp.PrimaryKey):
             primary_key = [e.name for e in definition.expressions]
         elif isinstance(definition, exp.ForeignKey):
@@ -128,17 +133,36 @@ def _is_nullable(definition: exp.ColumnDef) -> bool:
     return True
 
 
-def _read_foreign_key(node: exp.ForeignKey) -> dict[str, Any]:
-    reference = node.args.get("reference")
-    target = reference.this if reference is not None else None
+def _read_reference(reference: exp.Expression | None) -> tuple[str, list[str]]:
+    """Lee el destino de un `REFERENCES`: la tabla y, si las declara, sus columnas.
 
-    referenced_table = ""
-    referenced_columns: list[str] = []
+    Es la única lectura del destino, compartida por la forma en línea y la de
+    tabla; con dos podrían divergir sobre el mismo SQL.
+    """
+    target = reference.this if reference is not None else None
     if isinstance(target, exp.Schema):
-        referenced_table = target.this.name
-        referenced_columns = [c.name for c in target.expressions]
-    elif isinstance(target, exp.Table):
-        referenced_table = target.name
+        return target.this.name, [c.name for c in target.expressions]
+    if isinstance(target, exp.Table):
+        return target.name, []
+    return "", []
+
+
+def _read_column_reference(column: str, reference: exp.Reference) -> dict[str, Any]:
+    """Traduce el `REFERENCES` en línea de una columna a una clave foránea.
+
+    sqlglot no lo eleva a `ForeignKey`: queda como restricción de la columna, y
+    sin esta rama la arista se perdería sin caer siquiera en el diagnóstico.
+    """
+    referenced_table, referenced_columns = _read_reference(reference)
+    return {
+        "columns": [column],
+        "referencesTable": referenced_table,
+        "referencesColumns": referenced_columns,
+    }
+
+
+def _read_foreign_key(node: exp.ForeignKey) -> dict[str, Any]:
+    referenced_table, referenced_columns = _read_reference(node.args.get("reference"))
 
     # Los nombres de los campos son los de `ForeignKey` en
     # `src/domain/normalizedSchema.ts`, para que el dominio consuma el IR sin
@@ -163,16 +187,44 @@ def _apply_alter(node: exp.Alter, tables: dict[str, dict[str, Any]]) -> None:
         return
 
     for action in node.args.get("actions") or []:
-        candidates = [action]
-        if isinstance(action, exp.Constraint):
-            candidates = list(action.expressions)
-        for candidate in candidates:
+        for candidate in _flatten_constraints(action):
             if isinstance(candidate, exp.ForeignKey):
                 foreign_key = _read_foreign_key(candidate)
                 if foreign_key["referencesTable"]:
                     table["foreignKeys"].append(foreign_key)
             elif isinstance(candidate, exp.PrimaryKey) and not table["primaryKey"]:
                 table["primaryKey"] = [e.name for e in candidate.expressions]
+
+
+def _flatten_constraints(action: exp.Expression) -> list[exp.Expression]:
+    """Desenvuelve las restricciones que declara una acción de `ALTER TABLE`.
+
+    sqlglot envuelve el `ADD` en un `AddConstraint` y, cuando la restricción
+    lleva nombre, en un `Constraint` más adentro.
+    """
+    if isinstance(action, (exp.AddConstraint, exp.Constraint)):
+        return [nested for inner in action.expressions for nested in _flatten_constraints(inner)]
+    return [action]
+
+
+def _resolve_reference_columns(tables: dict[str, dict[str, Any]]) -> None:
+    """Completa contra la clave primaria destino las foráneas que no la declaran.
+
+    Corre al final porque el volcado puede referenciar una tabla que declara más
+    abajo: el destino solo se conoce con el archivo entero leído.
+    """
+    for table in tables.values():
+        resolved: list[dict[str, Any]] = []
+        for foreign_key in table["foreignKeys"]:
+            if not foreign_key["referencesColumns"]:
+                target = tables.get(foreign_key["referencesTable"])
+                foreign_key["referencesColumns"] = list(target["primaryKey"]) if target else []
+            # El dominio da por sentado que `referencesColumns` se alinea
+            # posicionalmente con `columns`; una arista que no puede cumplirlo
+            # miente más de lo que aporta, así que se descarta.
+            if len(foreign_key["referencesColumns"]) == len(foreign_key["columns"]):
+                resolved.append(foreign_key)
+        table["foreignKeys"] = resolved
 
 
 def _read_insert(
