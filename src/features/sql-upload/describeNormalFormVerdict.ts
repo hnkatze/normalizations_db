@@ -19,13 +19,20 @@ export type NormalFormBlocker = {
   readonly dependents: readonly ColumnName[]
 }
 
-export type NormalFormVerdictSummary = {
-  readonly normalForm: NormalForm
-  readonly headline: string
-  readonly detail: string
-  /** Una entrada por causa, no por violación. Vacío cuando ya está en 3FN. */
-  readonly blockers: readonly NormalFormBlocker[]
-}
+export type NormalFormVerdictSummary =
+  | {
+      readonly status: "diagnosed"
+      readonly normalForm: NormalForm
+      readonly headline: string
+      readonly detail: string
+      /** Una entrada por causa, no por violación. Vacío cuando ya está en 3FN. */
+      readonly blockers: readonly NormalFormBlocker[]
+    }
+  | {
+      readonly status: "undiagnosable"
+      readonly headline: string
+      readonly detail: string
+    }
 
 /** La forma normal que se alcanza al resolver los bloqueos actuales. */
 const NEXT_FORM: Readonly<Record<NormalForm, NormalForm | null>> = {
@@ -47,16 +54,32 @@ const DETAIL_BY_FORM: Readonly<Record<NormalForm, string>> = {
 }
 
 export function describeNormalFormVerdict(verdict: NormalFormVerdict): NormalFormVerdictSummary {
-  const nextForm = NEXT_FORM[verdict.normalForm]
-
-  return {
-    normalForm: verdict.normalForm,
-    headline:
-      nextForm === null
-        ? `Esta tabla ya está en ${normalFormLabel(verdict.normalForm)}`
-        : `Esta tabla está en ${normalFormLabel(verdict.normalForm)}`,
-    detail: DETAIL_BY_FORM[verdict.normalForm],
-    blockers: groupByDeterminant(verdict.violations),
+  switch (verdict.status) {
+    case "undiagnosable":
+      return {
+        status: "undiagnosable",
+        headline: "No se puede determinar la forma normal de esta tabla",
+        detail:
+          "El archivo declara la estructura de la tabla pero no incluye sentencias INSERT, " +
+          "así que no hay filas contra las cuales contrastar ninguna dependencia funcional.",
+      }
+    case "diagnosed": {
+      const nextForm = NEXT_FORM[verdict.normalForm]
+      return {
+        status: "diagnosed",
+        normalForm: verdict.normalForm,
+        headline:
+          nextForm === null
+            ? `Esta tabla ya está en ${normalFormLabel(verdict.normalForm)}`
+            : `Esta tabla está en ${normalFormLabel(verdict.normalForm)}`,
+        detail: DETAIL_BY_FORM[verdict.normalForm],
+        blockers: groupByDeterminant(verdict.violations),
+      }
+    }
+    default: {
+      const unhandled: never = verdict
+      throw new Error(`describeNormalFormVerdict: estado no contemplado ${String(unhandled)}`)
+    }
   }
 }
 

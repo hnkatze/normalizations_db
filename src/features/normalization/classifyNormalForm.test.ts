@@ -1,15 +1,18 @@
 import { describe, expect, it } from "vitest"
 
-import type { ColumnDefinition, FlatTable, FunctionalDependency } from "@/domain"
+import type { ColumnDefinition, FlatTable, FunctionalDependency, Row } from "@/domain"
 
-import { classifyNormalForm } from "./classifyNormalForm"
+import { classifyNormalForm, type NormalFormVerdict } from "./classifyNormalForm"
 
 function column(name: string): ColumnDefinition {
   return { name, sqlType: "text", nullable: false }
 }
 
+/** Una fila con contenido irrelevante: solo importa que exista, no qué trae. */
+const DUMMY_ROW: Row = {}
+
 function tableOf(...names: readonly string[]): FlatTable {
-  return { name: "fixture", columns: names.map(column), rows: [] }
+  return { name: "fixture", columns: names.map(column), rows: [DUMMY_ROW] }
 }
 
 /** Una dependencia con evidencia real: cada determinante se repite. */
@@ -37,24 +40,51 @@ function vacuousDependency(
   }
 }
 
+/** Estrecha el veredicto a la variante diagnosticada o falla el test explícitamente. */
+function expectDiagnosed(
+  verdict: NormalFormVerdict,
+): Extract<NormalFormVerdict, { status: "diagnosed" }> {
+  if (verdict.status !== "diagnosed") {
+    throw new Error("se esperaba un veredicto diagnosticado, llegó undiagnosable")
+  }
+  return verdict
+}
+
 describe("classifyNormalForm", () => {
-  it("declara 3FN cuando ninguna dependencia viola nada", () => {
+  it("no declara 3FN a una tabla sin filas: reporta undiagnosable", () => {
+    // Caso real: un export de solo esquema de SSMS (DDL sin un solo INSERT).
+    // Sin filas no hay con qué contradecir ninguna dependencia, y "no se
+    // pudo verificar" no es lo mismo que "ya está en 3FN".
     const verdict = classifyNormalForm({
-      table: tableOf("venta_id", "fecha", "total"),
-      confirmedDependencies: [dependency(["venta_id"], "fecha")],
-      primaryKey: ["venta_id"],
+      table: { name: "fixture", columns: [column("a"), column("b")], rows: [] },
+      confirmedDependencies: [],
+      primaryKey: ["a"],
     })
+
+    expect(verdict).toEqual({ status: "undiagnosable", reason: "no-rows" })
+  })
+
+  it("declara 3FN cuando ninguna dependencia viola nada", () => {
+    const verdict = expectDiagnosed(
+      classifyNormalForm({
+        table: tableOf("venta_id", "fecha", "total"),
+        confirmedDependencies: [dependency(["venta_id"], "fecha")],
+        primaryKey: ["venta_id"],
+      }),
+    )
 
     expect(verdict.normalForm).toBe("3NF")
     expect(verdict.violations).toEqual([])
   })
 
   it("declara 1FN y nombra la dependencia parcial cuando la clave es compuesta", () => {
-    const verdict = classifyNormalForm({
-      table: tableOf("venta_id", "producto_id", "producto_nombre", "cantidad"),
-      confirmedDependencies: [dependency(["producto_id"], "producto_nombre")],
-      primaryKey: ["venta_id", "producto_id"],
-    })
+    const verdict = expectDiagnosed(
+      classifyNormalForm({
+        table: tableOf("venta_id", "producto_id", "producto_nombre", "cantidad"),
+        confirmedDependencies: [dependency(["producto_id"], "producto_nombre")],
+        primaryKey: ["venta_id", "producto_id"],
+      }),
+    )
 
     expect(verdict.normalForm).toBe("1NF")
     expect(verdict.violations).toEqual([
@@ -63,11 +93,13 @@ describe("classifyNormalForm", () => {
   })
 
   it("declara 2FN cuando solo quedan dependencias transitivas", () => {
-    const verdict = classifyNormalForm({
-      table: tableOf("cliente_id", "ciudad_id", "ciudad_nombre"),
-      confirmedDependencies: [dependency(["ciudad_id"], "ciudad_nombre")],
-      primaryKey: ["cliente_id"],
-    })
+    const verdict = expectDiagnosed(
+      classifyNormalForm({
+        table: tableOf("cliente_id", "ciudad_id", "ciudad_nombre"),
+        confirmedDependencies: [dependency(["ciudad_id"], "ciudad_nombre")],
+        primaryKey: ["cliente_id"],
+      }),
+    )
 
     expect(verdict.normalForm).toBe("2NF")
     expect(verdict.violations).toEqual([
@@ -76,24 +108,28 @@ describe("classifyNormalForm", () => {
   })
 
   it("una clave de una sola columna nunca puede tener dependencias parciales", () => {
-    const verdict = classifyNormalForm({
-      table: tableOf("cliente_id", "nombre"),
-      confirmedDependencies: [dependency(["cliente_id"], "nombre")],
-      primaryKey: ["cliente_id"],
-    })
+    const verdict = expectDiagnosed(
+      classifyNormalForm({
+        table: tableOf("cliente_id", "nombre"),
+        confirmedDependencies: [dependency(["cliente_id"], "nombre")],
+        primaryKey: ["cliente_id"],
+      }),
+    )
 
     expect(verdict.violations.filter((v) => v.kind === "partial")).toEqual([])
   })
 
   it("reporta AMBAS clases de violación cuando conviven, y gana la más grave", () => {
-    const verdict = classifyNormalForm({
-      table: tableOf("venta_id", "producto_id", "producto_nombre", "ciudad_id", "ciudad_nombre"),
-      confirmedDependencies: [
-        dependency(["producto_id"], "producto_nombre"),
-        dependency(["ciudad_id"], "ciudad_nombre"),
-      ],
-      primaryKey: ["venta_id", "producto_id"],
-    })
+    const verdict = expectDiagnosed(
+      classifyNormalForm({
+        table: tableOf("venta_id", "producto_id", "producto_nombre", "ciudad_id", "ciudad_nombre"),
+        confirmedDependencies: [
+          dependency(["producto_id"], "producto_nombre"),
+          dependency(["ciudad_id"], "ciudad_nombre"),
+        ],
+        primaryKey: ["venta_id", "producto_id"],
+      }),
+    )
 
     expect(verdict.normalForm).toBe("1NF")
     expect(verdict.violations).toEqual([
@@ -103,32 +139,38 @@ describe("classifyNormalForm", () => {
   })
 
   it("ignora una dependencia cuyo dependiente forma parte de la clave primaria", () => {
-    const verdict = classifyNormalForm({
-      table: tableOf("venta_id", "producto_id", "cantidad"),
-      confirmedDependencies: [dependency(["cantidad"], "producto_id")],
-      primaryKey: ["venta_id", "producto_id"],
-    })
+    const verdict = expectDiagnosed(
+      classifyNormalForm({
+        table: tableOf("venta_id", "producto_id", "cantidad"),
+        confirmedDependencies: [dependency(["cantidad"], "producto_id")],
+        primaryKey: ["venta_id", "producto_id"],
+      }),
+    )
 
     expect(verdict.normalForm).toBe("3NF")
     expect(verdict.violations).toEqual([])
   })
 
   it("ignora la dependencia trivial en la que el dependiente ya está en su determinante", () => {
-    const verdict = classifyNormalForm({
-      table: tableOf("a", "b", "c"),
-      confirmedDependencies: [dependency(["a", "b"], "b")],
-      primaryKey: ["a"],
-    })
+    const verdict = expectDiagnosed(
+      classifyNormalForm({
+        table: tableOf("a", "b", "c"),
+        confirmedDependencies: [dependency(["a", "b"], "b")],
+        primaryKey: ["a"],
+      }),
+    )
 
     expect(verdict.normalForm).toBe("3NF")
   })
 
   it("una dependencia de clave completa no es una violación", () => {
-    const verdict = classifyNormalForm({
-      table: tableOf("venta_id", "producto_id", "cantidad"),
-      confirmedDependencies: [dependency(["venta_id", "producto_id"], "cantidad")],
-      primaryKey: ["venta_id", "producto_id"],
-    })
+    const verdict = expectDiagnosed(
+      classifyNormalForm({
+        table: tableOf("venta_id", "producto_id", "cantidad"),
+        confirmedDependencies: [dependency(["venta_id", "producto_id"], "cantidad")],
+        primaryKey: ["venta_id", "producto_id"],
+      }),
+    )
 
     expect(verdict.normalForm).toBe("3NF")
     expect(verdict.violations).toEqual([])
@@ -138,26 +180,30 @@ describe("classifyNormalForm", () => {
     // `cliente_id` y `cliente_email` se determinan mutuamente: son la misma
     // entidad. El motor las fusiona, así que el diagnóstico no puede leer la
     // segunda como un determinante ajeno a la clave.
-    const verdict = classifyNormalForm({
-      table: tableOf("cliente_id", "cliente_email", "nombre"),
-      confirmedDependencies: [
-        dependency(["cliente_id"], "cliente_email"),
-        dependency(["cliente_email"], "cliente_id"),
-        dependency(["cliente_email"], "nombre"),
-      ],
-      primaryKey: ["cliente_id"],
-    })
+    const verdict = expectDiagnosed(
+      classifyNormalForm({
+        table: tableOf("cliente_id", "cliente_email", "nombre"),
+        confirmedDependencies: [
+          dependency(["cliente_id"], "cliente_email"),
+          dependency(["cliente_email"], "cliente_id"),
+          dependency(["cliente_email"], "nombre"),
+        ],
+        primaryKey: ["cliente_id"],
+      }),
+    )
 
     expect(verdict.normalForm).toBe("3NF")
     expect(verdict.violations).toEqual([])
   })
 
-  it("sin dependencias confirmadas, la tabla ya está en 3FN", () => {
-    const verdict = classifyNormalForm({
-      table: tableOf("a", "b"),
-      confirmedDependencies: [],
-      primaryKey: ["a"],
-    })
+  it("sin dependencias confirmadas, una tabla con filas ya está en 3FN", () => {
+    const verdict = expectDiagnosed(
+      classifyNormalForm({
+        table: tableOf("a", "b"),
+        confirmedDependencies: [],
+        primaryKey: ["a"],
+      }),
+    )
 
     expect(verdict.normalForm).toBe("3NF")
     expect(verdict.violations).toEqual([])
@@ -167,17 +213,19 @@ describe("classifyNormalForm", () => {
     // El caso real de `empleado`: 7 filas, y `{dir} -> oficio` se cumple
     // porque dos personas de León resultaron ser vendedoras. La tabla ya
     // está en 3FN y declararla en 2FN por esto sería mentirle al usuario.
-    const verdict = classifyNormalForm({
-      table: tableOf("codigo_c", "dir", "oficio"),
-      confirmedDependencies: [
-        {
-          determinant: ["dir"],
-          dependent: "oficio",
-          evidence: { groupCount: 6, rowCount: 7, maxGroupSize: 2, isTrivial: false },
-        },
-      ],
-      primaryKey: ["codigo_c"],
-    })
+    const verdict = expectDiagnosed(
+      classifyNormalForm({
+        table: tableOf("codigo_c", "dir", "oficio"),
+        confirmedDependencies: [
+          {
+            determinant: ["dir"],
+            dependent: "oficio",
+            evidence: { groupCount: 6, rowCount: 7, maxGroupSize: 2, isTrivial: false },
+          },
+        ],
+        primaryKey: ["codigo_c"],
+      }),
+    )
 
     expect(verdict.normalForm).toBe("3NF")
     expect(verdict.violations).toEqual([])
@@ -187,11 +235,13 @@ describe("classifyNormalForm", () => {
     // Con 12 filas y 12 valores distintos, ninguna fila pudo contradecirla:
     // no es evidencia de una regla del dominio, y descomponer por ella
     // fabrica una tabla que nadie pidió.
-    const verdict = classifyNormalForm({
-      table: tableOf("cliente_id", "telefono", "ciudad"),
-      confirmedDependencies: [vacuousDependency(["telefono"], "ciudad")],
-      primaryKey: ["cliente_id"],
-    })
+    const verdict = expectDiagnosed(
+      classifyNormalForm({
+        table: tableOf("cliente_id", "telefono", "ciudad"),
+        confirmedDependencies: [vacuousDependency(["telefono"], "ciudad")],
+        primaryKey: ["cliente_id"],
+      }),
+    )
 
     expect(verdict.normalForm).toBe("3NF")
     expect(verdict.violations).toEqual([])

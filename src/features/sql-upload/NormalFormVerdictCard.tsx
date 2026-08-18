@@ -1,8 +1,12 @@
-import { CircleCheckIcon, TriangleAlertIcon } from "lucide-react"
+import { CircleCheckIcon, InfoIcon, TriangleAlertIcon } from "lucide-react"
 
 import type { NormalFormVerdict } from "@/features/normalization"
 
-import { describeNormalFormVerdict, type NormalFormBlocker } from "./describeNormalFormVerdict"
+import {
+  describeNormalFormVerdict,
+  type NormalFormBlocker,
+  type NormalFormVerdictSummary,
+} from "./describeNormalFormVerdict"
 
 type NormalFormVerdictCardProps = {
   readonly verdict: NormalFormVerdict
@@ -21,7 +25,6 @@ type NormalFormVerdictCardProps = {
  */
 export function NormalFormVerdictCard({ verdict }: NormalFormVerdictCardProps) {
   const summary = describeNormalFormVerdict(verdict)
-  const isNormalized = summary.blockers.length === 0
 
   return (
     <section
@@ -29,26 +32,14 @@ export function NormalFormVerdictCard({ verdict }: NormalFormVerdictCardProps) {
       className="rounded-lg border border-border bg-card p-3"
     >
       <div className="flex items-start gap-2">
-        {isNormalized ? (
-          <CircleCheckIcon
-            aria-hidden="true"
-            focusable="false"
-            className="mt-0.5 size-4 shrink-0 text-foreground"
-          />
-        ) : (
-          <TriangleAlertIcon
-            aria-hidden="true"
-            focusable="false"
-            className="mt-0.5 size-4 shrink-0 text-foreground"
-          />
-        )}
+        <VerdictIcon summary={summary} />
         <div className="min-w-0 flex-1">
           {/* Sin insignia con la forma normal al lado: el titular ya la dice,
               y repetirla en la misma línea no agrega lectura, agrega ruido. */}
           <p className="text-sm font-medium text-foreground">{summary.headline}</p>
           <p className="mt-1 text-xs text-muted-foreground">{summary.detail}</p>
 
-          {isNormalized ? null : (
+          {summary.status === "diagnosed" && summary.blockers.length > 0 ? (
             <ul role="list" className="mt-2 flex flex-col gap-1.5">
               {summary.blockers.map((blocker) => (
                 <li key={blockerKey(blocker)} className="text-xs text-muted-foreground">
@@ -64,7 +55,7 @@ export function NormalFormVerdictCard({ verdict }: NormalFormVerdictCardProps) {
                 </li>
               ))}
             </ul>
-          )}
+          ) : null}
         </div>
       </div>
     </section>
@@ -73,4 +64,40 @@ export function NormalFormVerdictCard({ verdict }: NormalFormVerdictCardProps) {
 
 function blockerKey(blocker: NormalFormBlocker): string {
   return `${blocker.kind}:${blocker.determinant.join(",")}`
+}
+
+type VerdictIconProps = {
+  readonly summary: NormalFormVerdictSummary
+}
+
+/** El icono depende de si hay algo que resolver, no solo de si hubo diagnóstico. */
+function VerdictIcon({ summary }: VerdictIconProps) {
+  switch (summary.status) {
+    case "undiagnosable":
+      return (
+        <InfoIcon
+          aria-hidden="true"
+          focusable="false"
+          className="mt-0.5 size-4 shrink-0 text-foreground"
+        />
+      )
+    case "diagnosed":
+      return summary.blockers.length === 0 ? (
+        <CircleCheckIcon
+          aria-hidden="true"
+          focusable="false"
+          className="mt-0.5 size-4 shrink-0 text-foreground"
+        />
+      ) : (
+        <TriangleAlertIcon
+          aria-hidden="true"
+          focusable="false"
+          className="mt-0.5 size-4 shrink-0 text-foreground"
+        />
+      )
+    default: {
+      const unhandled: never = summary
+      throw new Error(`NormalFormVerdictCard: estado no contemplado ${String(unhandled)}`)
+    }
+  }
 }

@@ -30,12 +30,23 @@ export type NormalFormViolation = {
   readonly dependent: ColumnName
 }
 
-export type NormalFormVerdict = {
-  /** La forma normal más alta que la tabla satisface hoy. */
-  readonly normalForm: NormalForm
-  /** Vacío exactamente cuando `normalForm` es 3FN. Parciales primero. */
-  readonly violations: readonly NormalFormViolation[]
-}
+/**
+ * Sin filas no hay evidencia contra la cual contrastar ninguna dependencia:
+ * "ya está en 3FN" y "no se pudo verificar" son respuestas distintas, y
+ * confundirlas es el bug que esta unión existe para prevenir.
+ */
+export type NormalFormVerdict =
+  | {
+      readonly status: "diagnosed"
+      /** La forma normal más alta que la tabla satisface hoy. */
+      readonly normalForm: NormalForm
+      /** Vacío exactamente cuando `normalForm` es 3FN. Parciales primero. */
+      readonly violations: readonly NormalFormViolation[]
+    }
+  | {
+      readonly status: "undiagnosable"
+      readonly reason: "no-rows"
+    }
 
 /**
  * Clasifica una tabla contra las dependencias confirmadas para ella.
@@ -46,6 +57,13 @@ export type NormalFormVerdict = {
  */
 export function classifyNormalForm(input: NormalizationInput): NormalFormVerdict {
   const { table, confirmedDependencies, primaryKey } = input
+
+  // Un export de solo esquema (DDL sin INSERT) no trae con qué contradecir
+  // ninguna dependencia. Declararla en 3FN por defecto sería mentir.
+  if (table.rows.length === 0) {
+    return { status: "undiagnosable", reason: "no-rows" }
+  }
+
   const allColumns = columnNamesOf(table)
   const primaryKeySet = new Set(primaryKey)
   const canonicalColumn = createCanonicalizer(allColumns, confirmedDependencies, primaryKey)
@@ -101,7 +119,7 @@ export function classifyNormalForm(input: NormalizationInput): NormalFormVerdict
     ...violations.filter((violation) => violation.kind === "transitive"),
   ]
 
-  return { normalForm: highestFormSatisfied(ordered), violations: ordered }
+  return { status: "diagnosed", normalForm: highestFormSatisfied(ordered), violations: ordered }
 }
 
 function highestFormSatisfied(violations: readonly NormalFormViolation[]): NormalForm {

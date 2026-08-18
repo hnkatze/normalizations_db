@@ -292,10 +292,7 @@ export function SqlUploadContainer() {
         schemaReview.primaryKey.length === 0
           ? null
           : classifyNormalForm({
-              table: {
-                ...analysis.table,
-                rows: [],
-              },
+              table: analysis.table,
 
               primaryKey:
                 schemaReview.primaryKey,
