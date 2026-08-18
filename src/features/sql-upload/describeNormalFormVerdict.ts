@@ -85,6 +85,13 @@ function groupByDeterminant(
       })
       continue
     }
+    // Deduplicado: el mismo par (determinante, dependiente) puede llegar más
+    // de una vez cuando la canonicalización de claves alternativas colapsa
+    // determinantes distintos en uno solo. Sin esto la pantalla lista la
+    // misma columna dos veces y parece que hubiera más problemas de los que hay.
+    if (existing.dependents.includes(violation.dependent)) {
+      continue
+    }
     blockers.set(key, {
       ...existing,
       dependents: [...existing.dependents, violation.dependent],

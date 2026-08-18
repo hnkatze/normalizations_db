@@ -65,6 +65,29 @@ describe("describeNormalFormVerdict", () => {
     expect(summary.blockers[0]?.kind).toBe("partial")
   })
 
+  it("no repite un dependiente que llega dos veces por el mismo determinante", () => {
+    // La canonicalización de claves alternativas colapsa determinantes
+    // distintos en uno solo, así que el mismo par puede llegar más de una
+    // vez. Sin deduplicar, la pantalla lista "categoria_id, categoria_id".
+    const verdict: NormalFormVerdict = {
+      normalForm: "1NF",
+      violations: [
+        { kind: "partial", determinant: ["producto_id"], dependent: "producto_precio" },
+        { kind: "partial", determinant: ["producto_id"], dependent: "categoria_id" },
+        { kind: "partial", determinant: ["producto_id"], dependent: "producto_precio" },
+        { kind: "partial", determinant: ["producto_id"], dependent: "categoria_id" },
+      ],
+    }
+
+    expect(describeNormalFormVerdict(verdict).blockers).toEqual([
+      {
+        kind: "partial",
+        determinant: ["producto_id"],
+        dependents: ["producto_precio", "categoria_id"],
+      },
+    ])
+  })
+
   it("mantiene separados dos determinantes distintos con el mismo dependiente", () => {
     const verdict: NormalFormVerdict = {
       normalForm: "2NF",
