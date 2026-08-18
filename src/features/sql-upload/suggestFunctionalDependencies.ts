@@ -4,6 +4,7 @@ import type {
 } from "@/domain"
 
 import {
+  hasSolidEvidence,
   isVacuous,
 } from "@/domain"
 
@@ -178,12 +179,21 @@ export function suggestFunctionalDependencies(
     }
 
     /*
-     * Una dependencia vacua que NO parte de la
-     * PK no tiene evidencia suficiente para ser
-     * preseleccionada.
+     * Sin evidencia suficiente no se preselecciona.
+     *
+     * El mismo criterio que usa el diagnóstico de
+     * forma normal, y por eso `hasSolidEvidence` y
+     * no `isVacuous`: con dos criterios distintos,
+     * la pantalla llegaba a decir "esta tabla ya
+     * está en 3FN" y descomponerla igual en tres
+     * tablas, contradiciéndose sola.
+     *
+     * `isVacuous` solo descarta lo que NUNCA pudo
+     * fallar; una regla corroborada por una sola
+     * fila de siete tampoco es evidencia.
      */
     if (
-      isVacuous(
+      !hasSolidEvidence(
         dependency.evidence,
       )
     ) {

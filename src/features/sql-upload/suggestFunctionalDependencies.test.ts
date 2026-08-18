@@ -29,8 +29,11 @@ function fd(
       groupCount:
         options?.groupCount ?? 2,
 
+      // 5 filas en 2 grupos = 3 oportunidades de refutación, el mínimo que
+      // `hasSolidEvidence` pide para tomar una regla en serio. Con 4 filas
+      // estas dependencias quedaban un escalón por debajo del umbral.
       rowCount:
-        options?.rowCount ?? 4,
+        options?.rowCount ?? 5,
 
       isTrivial:
         options?.isTrivial ?? false,
