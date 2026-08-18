@@ -1,3 +1,7 @@
+"use client"
+
+import { useState } from "react"
+
 import { Badge } from "@/components/ui/badge"
 import {
   Table,
@@ -12,9 +16,17 @@ import type { ParsedTable } from "@/domain"
 
 import { CellText } from "./CellText"
 import { describeParsedTable } from "./describeParsedTable"
+import { paginate } from "./paginate"
+import { PaginationNav } from "./PaginationNav"
 
 /** Cuántas filas se muestran como muestra. El resto se resume en el pie. */
 const PREVIEW_ROWS = 8
+
+/**
+ * 16, no el piso de 10 pedido: iguala o supera las 13-15 columnas de las
+ * tablas semilla, así que `paginate` les deja `pageCount` en 1 y sin controles.
+ */
+const COLUMNS_PER_PAGE = 16
 
 type ParsedTableDetailProps = {
   readonly table: ParsedTable
@@ -33,6 +45,19 @@ export function ParsedTableDetail({ table }: ParsedTableDetailProps) {
   const described = describeParsedTable(table)
   const preview = table.rows.slice(0, PREVIEW_ROWS)
   const remaining = table.rows.length - preview.length
+
+  const [tableName, setTableName] = useState(table.name)
+  const [currentPage, setCurrentPage] = useState(1)
+
+  // El padre no remonta este componente al cambiar de tabla (no le pone
+  // `key`), así que sin este ajuste la página quedaría pegada a la tabla
+  // anterior en vez de volver a la primera.
+  if (table.name !== tableName) {
+    setTableName(table.name)
+    setCurrentPage(1)
+  }
+
+  const columnsPage = paginate(described.columns, COLUMNS_PER_PAGE, currentPage)
 
   return (
     <div className="flex flex-col gap-4">
@@ -53,7 +78,7 @@ export function ParsedTableDetail({ table }: ParsedTableDetailProps) {
           role="list"
           className="grid grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] gap-1.5"
         >
-          {described.columns.map((column) => (
+          {columnsPage.items.map((column) => (
             <li
               key={column.name}
               className="flex min-w-0 flex-col gap-0.5 rounded-md border border-border px-2.5 py-1.5"
@@ -85,6 +110,17 @@ export function ParsedTableDetail({ table }: ParsedTableDetailProps) {
             </li>
           ))}
         </ul>
+
+        <PaginationNav
+          ariaLabel="Páginas de columnas declaradas"
+          itemNoun="columnas"
+          pageNumber={columnsPage.pageNumber}
+          pageCount={columnsPage.pageCount}
+          firstItemNumber={columnsPage.firstItemNumber}
+          lastItemNumber={columnsPage.lastItemNumber}
+          totalItems={columnsPage.totalItems}
+          onPageChange={setCurrentPage}
+        />
       </div>
 
       {preview.length > 0 ? (

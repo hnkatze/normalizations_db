@@ -1,3 +1,7 @@
+"use client"
+
+import { useState } from "react"
+
 import { Badge } from "@/components/ui/badge"
 import type {
   ColumnDefinition,
@@ -5,6 +9,14 @@ import type {
 } from "@/domain"
 
 import { columnRedundancyOf } from "./columnRedundancy"
+import { paginate } from "./paginate"
+import { PaginationNav } from "./PaginationNav"
+
+/**
+ * 16, no el piso de 10 pedido: iguala o supera las 13-15 columnas de las
+ * tablas semilla, así que `paginate` les deja `pageCount` en 1 y sin controles.
+ */
+const COLUMNS_PER_PAGE = 16
 
 type FlatTableOverviewProps = {
   readonly tableName: string
@@ -46,6 +58,14 @@ export function FlatTableOverview({
         entry.repeatsUpTo > 1,
     ).length
 
+  const [currentPage, setCurrentPage] = useState(1)
+
+  const redundancyPage = paginate(
+    redundancy,
+    COLUMNS_PER_PAGE,
+    currentPage,
+  )
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -60,7 +80,7 @@ export function FlatTableOverview({
       </div>
 
       <ul className="flex flex-col gap-1">
-        {redundancy.map(
+        {redundancyPage.items.map(
           (entry) => {
             const hasDuplicatedValues =
               entry.repeatsUpTo > 1
@@ -99,6 +119,17 @@ export function FlatTableOverview({
           },
         )}
       </ul>
+
+      <PaginationNav
+        ariaLabel="Páginas de columnas"
+        itemNoun="columnas"
+        pageNumber={redundancyPage.pageNumber}
+        pageCount={redundancyPage.pageCount}
+        firstItemNumber={redundancyPage.firstItemNumber}
+        lastItemNumber={redundancyPage.lastItemNumber}
+        totalItems={redundancyPage.totalItems}
+        onPageChange={setCurrentPage}
+      />
     </div>
   )
 }
