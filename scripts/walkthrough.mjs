@@ -69,13 +69,27 @@ await shot("02-tablas")
 
 await page.getByRole("button", { name: /normalizar ventas_raw/i }).click()
 
-// 3. 1FN: clave primaria compuesta.
+// 3. 1FN: la clave primaria.
+//
+// La aplicación ahora LEE la clave del `CREATE TABLE` y la ofrece para
+// confirmar, en vez de pedir que se marque columna por columna. El selector
+// manual solo aparece detrás de "Corregir", así que el recorrido confirma la
+// declarada — que para la semilla de referencia ya es la compuesta correcta.
 await page.getByRole("heading", { name: /1FN/ }).waitFor({ timeout: 30000 })
-for (const col of ["venta_id", "producto_id"]) {
-  const box = page.getByRole("checkbox", { name: new RegExp(`^${col}$`) }).first()
-  await box.click()
-  log("clave:", col)
+const confirmKey = page.getByRole("button", { name: /confirmar clave/i }).first()
+if ((await confirmKey.count()) > 0) {
+  await confirmKey.click()
+  log("clave: confirmada desde el archivo")
+} else {
+  // Sin clave declarada en el archivo hay que elegirla a mano.
+  await page.getByRole("button", { name: /corregir/i }).first().click()
+  for (const col of ["venta_id", "producto_id"]) {
+    await page.getByRole("checkbox", { name: new RegExp(`^${col}$`) }).first().click()
+    log("clave:", col)
+  }
+  await page.getByRole("button", { name: /confirmar clave/i }).first().click()
 }
+await page.waitForTimeout(500)
 
 // 4. Confirmar las reglas del answer key.
 let confirmed = 0
@@ -87,6 +101,13 @@ for (const [det, dep] of CONFIRM) {
     continue
   }
   try {
+    // La aplicación ahora preconfirma sola parte de las reglas al confirmar la
+    // clave. Un click a ciegas las DESMARCARÍA: hay que mirar el estado antes
+    // de tocar, o el recorrido termina deshaciendo el trabajo que vino a verificar.
+    if ((await box.getAttribute("aria-checked")) === "true") {
+      confirmed += 1
+      continue
+    }
     await box.click({ timeout: 4000 })
     confirmed += 1
   } catch {
