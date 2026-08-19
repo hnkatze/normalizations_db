@@ -174,7 +174,7 @@ export function FirstNormalFormAnalysis({
       ) : null}
 
       {!hasViolations ? (
-        <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+        <div className="rounded-lg border border-border border-l-4 border-l-primary bg-primary/6 px-3 py-2">
           <p className="text-xs text-muted-foreground">
             Este resultado no garantiza
             por sí solo que todos los
@@ -206,7 +206,7 @@ function RepeatingGroupCandidateCard({
   ) => void
 }) {
   return (
-    <div className="rounded-lg border border-border bg-muted/40 px-3 py-3">
+    <div className="rounded-lg border border-border border-l-4 border-l-chart-3 bg-chart-3/6 px-3 py-3">
       <p className="text-xs font-medium text-foreground">
         Posible grupo repetitivo
       </p>
@@ -295,7 +295,7 @@ function IssueCard({
       )
 
     return (
-      <div className="rounded-lg border border-border bg-muted/40 px-3 py-3">
+      <div className="rounded-lg border border-border border-l-4 border-l-chart-3 bg-chart-3/6 px-3 py-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-xs font-medium text-foreground">
@@ -370,7 +370,7 @@ function IssueCard({
     )
 
   return (
-    <div className="rounded-lg border border-border bg-muted/40 px-3 py-3">
+    <div className="rounded-lg border border-border border-l-4 border-l-chart-4 bg-chart-4/6 px-3 py-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="text-xs font-medium text-foreground">

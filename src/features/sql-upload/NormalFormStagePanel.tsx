@@ -1,11 +1,31 @@
 import { Badge } from "@/components/ui/badge"
 import type { FunctionalDependency, NormalForm, Row } from "@/domain"
+import { cn } from "@/lib/utils"
 
+import type { ErDiagramCaption } from "./ErDiagram"
 import { ErDiagram } from "./ErDiagram"
 import { normalizedSchemaToErDiagram } from "./erDiagramInput"
+import type { NormalizedTableCardRowCaption } from "./NormalizedTableCard"
 import { NormalizedTableCard } from "./NormalizedTableCard"
 import type { NormalizationStageView } from "./normalizationOutcome"
-import { diffStages } from "./stageDiff"
+import { diffStages, unchangedTableNames } from "./stageDiff"
+
+/**
+ * Cómo se está mostrando esta etapa.
+ *
+ * El recorrido MANUAL pinta una etapa sola y completa por pantalla:
+ * `"standaloneStage"`, el default, es exactamente ese comportamiento y no
+ * cambia. El modo AUTOMÁTICO apila las tres, así que el texto que describe
+ * al conjunto (no a esta etapa en particular) se dice una sola vez afuera:
+ * `"leadingStageOfAutoSet"` es la primera del grupo (1FN), que todavía
+ * conserva la instrucción completa del diagrama porque es la primera vez que
+ * se lee; `"followingStageOfAutoSet"` son las que siguen (2FN, 3FN), que la
+ * reemplazan por un nombre corto y propio de esa etapa.
+ */
+export type NormalFormStagePresentation =
+  | { readonly kind: "standaloneStage" }
+  | { readonly kind: "leadingStageOfAutoSet" }
+  | { readonly kind: "followingStageOfAutoSet" }
 
 /**
  * Cuántas reglas pendientes se nombran antes de resumir el resto.
@@ -14,6 +34,21 @@ import { diffStages } from "./stageDiff"
  * convertir la explicación en otra lista larga de las que ya hay una.
  */
 const PENDING_SHOWN = 6
+
+/**
+ * Color decorativo por forma normal: mismo trío fijo que usan
+ * `AutoNormalizeStagedSchema` y `NormalizedSchemaSection` para la misma
+ * etapa. Duplicado a propósito para no crear un import cruzado entre estos
+ * módulos — ver el comentario equivalente en `NormalizedSchemaSection`.
+ */
+const NORMAL_FORM_ACCENT: Readonly<Record<NormalForm, { readonly borderL: string; readonly bg: string }>> = {
+  "1NF": { borderL: "border-l-chart-1", bg: "bg-chart-1/8" },
+  "2NF": { borderL: "border-l-chart-3", bg: "bg-chart-3/8" },
+  "3NF": { borderL: "border-l-chart-5", bg: "bg-chart-5/8" },
+}
+
+/** La primera etapa no tiene anterior con la que compararse: ninguna tabla cuenta como "sin cambios". */
+const EMPTY_TABLE_NAMES: ReadonlySet<string> = new Set()
 
 type NormalFormStagePanelProps = {
   readonly stage: NormalizationStageView
@@ -26,6 +61,8 @@ type NormalFormStagePanelProps = {
   readonly originalTableName: string
   readonly primaryKeyColumnCount: number
   readonly ddlLabelId: string
+  /** @default { kind: "standaloneStage" } */
+  readonly presentation?: NormalFormStagePresentation
 }
 
 /**
@@ -46,6 +83,7 @@ export function NormalFormStagePanel({
   originalTableName,
   primaryKeyColumnCount,
   ddlLabelId,
+  presentation = { kind: "standaloneStage" },
 }: NormalFormStagePanelProps) {
   const explanation = explanationOf(stage.schema.normalForm, originalTableName)
   const change = previousStage === null ? null : diffStages(previousStage.schema, stage.schema)
@@ -55,15 +93,33 @@ export function NormalFormStagePanel({
   // renderice más de una etapa a la vez.
   const newTablesLabelId = `new-tables-${stage.schema.normalForm}`
 
+  const diagramCaption: ErDiagramCaption =
+    presentation.kind === "followingStageOfAutoSet"
+      ? { kind: "labelOnly", label: `Diagrama del esquema en ${labelOf(stage.schema.normalForm)}` }
+      : { kind: "instructional" }
+
+  // El pie de una tabla ya se explicó una vez para ESA MISMA tabla cuando su
+  // proyección de filas no cambió respecto de la etapa anterior — así sea que
+  // el resto de la etapa sí haya movido otras columnas. Repetir el detalle
+  // para una tabla que no cambió, en cada etapa apilada, no suma nada.
+  const unchangedTables = previousStage === null ? EMPTY_TABLE_NAMES : unchangedTableNames(previousStage.schema, stage.schema)
+  const isAutoStagedSet = presentation.kind !== "standaloneStage"
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-lg border border-border bg-muted/40 p-3">
+      <div
+        className={cn(
+          "rounded-lg border border-border border-l-4 p-3",
+          NORMAL_FORM_ACCENT[stage.schema.normalForm].borderL,
+          NORMAL_FORM_ACCENT[stage.schema.normalForm].bg,
+        )}
+      >
         <p className="text-sm font-medium text-foreground">{explanation.headline}</p>
         <p className="mt-1 text-sm text-muted-foreground">{explanation.detail}</p>
       </div>
 
       {change === null ? null : (
-        <div className="rounded-lg border border-border p-3">
+        <div className="rounded-lg border border-border border-l-4 border-l-chart-5 bg-chart-5/8 p-3">
           <p className="text-sm font-medium text-foreground">
             {changedNothing
               ? "Esta etapa no movió ninguna columna"
@@ -132,7 +188,10 @@ export function NormalFormStagePanel({
                   >
                     {change.newTables.map((name) => (
                       <li key={name}>
-                        <Badge variant="outline" className="font-mono font-normal">
+                        <Badge
+                          variant="outline"
+                          className="border-chart-5/60 bg-chart-5/15 font-mono font-normal text-foreground"
+                        >
                           {name}
                         </Badge>
                       </li>
@@ -153,7 +212,7 @@ export function NormalFormStagePanel({
       {/* El dibujo va ANTES de las tarjetas: primero la forma del esquema
           completo, después el detalle de cada tabla. Al revés obliga a
           reconstruir el conjunto de memoria mientras se leen las partes. */}
-      <ErDiagram input={normalizedSchemaToErDiagram(stage.schema)} />
+      <ErDiagram input={normalizedSchemaToErDiagram(stage.schema)} caption={diagramCaption} />
 
       {/*
         `auto-fit`, no `md:grid-cols-2` fijo: cuando la descomposición deja UNA
@@ -167,7 +226,12 @@ export function NormalFormStagePanel({
       */}
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(30rem,100%),1fr))] gap-4">
         {stage.schema.tables.map((table) => (
-          <NormalizedTableCard key={table.name} table={table} sourceRows={sourceRows} />
+          <NormalizedTableCard
+            key={table.name}
+            table={table}
+            sourceRows={sourceRows}
+            rowCaption={rowCaptionFor(table.name, isAutoStagedSet, unchangedTables)}
+          />
         ))}
       </div>
 
@@ -255,4 +319,17 @@ function explanationOf(normalForm: NormalForm, originalTableName: string): Stage
 
 function countLabel(count: number, singular: string, plural: string): string {
   return `${count} ${count === 1 ? singular : plural}`
+}
+
+/** `3NF` es el vocabulario del dominio; `3FN` es el del usuario. Duplicado a propósito, ver el comentario equivalente en `NormalizedSchemaSection`. */
+function labelOf(normalForm: NormalForm): string {
+  return normalForm.replace("NF", "FN")
+}
+
+function rowCaptionFor(
+  tableName: string,
+  isAutoStagedSet: boolean,
+  unchangedTables: ReadonlySet<string>,
+): NormalizedTableCardRowCaption {
+  return isAutoStagedSet && unchangedTables.has(tableName) ? "countOnly" : "full"
 }

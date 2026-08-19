@@ -19,11 +19,15 @@ export function TableNode({ data }: NodeProps<TableFlowNode>) {
   return (
     <div
       style={{ width: TABLE_NODE_WIDTH, height: size.height }}
-      className="flex flex-col overflow-hidden rounded-md border border-border bg-card text-left shadow-sm"
+      // Mismo tratamiento para TODOS los nodos, sin excepción: variar el
+      // color por tabla haría pensar que codifica una categoría, y es
+      // exactamente lo que esto no hace. Encabezado con acento, cuerpo
+      // neutro — igual que las tarjetas de tabla de abajo.
+      className="flex flex-col overflow-hidden rounded-md border border-chart-1/60 bg-card text-left shadow-sm"
     >
       <Handle type="target" position={Position.Left} aria-hidden="true" />
       <Handle type="source" position={Position.Right} aria-hidden="true" />
-      <p className="truncate border-b border-border bg-muted/40 px-2 py-1.5 font-mono text-sm font-medium text-foreground">
+      <p className="truncate border-b-2 border-b-chart-1/60 bg-chart-1/20 px-2 py-1.5 font-mono text-sm font-medium text-foreground">
         {data.tableName}
       </p>
       <ul className="flex flex-col overflow-hidden px-2 py-1">
@@ -42,11 +46,17 @@ export function TableNode({ data }: NodeProps<TableFlowNode>) {
                 {abbreviateSqlType(column.sqlType)}
               </span>
               {column.isPrimaryKey ? (
-                <Badge variant="outline" className="ml-auto shrink-0 px-1 text-[10px]">
+                <Badge
+                  variant="outline"
+                  className="ml-auto shrink-0 border-chart-1/60 bg-chart-1/15 px-1 text-[10px] text-foreground"
+                >
                   PK
                 </Badge>
               ) : column.isForeignKey ? (
-                <Badge variant="secondary" className="ml-auto shrink-0 px-1 text-[10px]">
+                <Badge
+                  variant="outline"
+                  className="ml-auto shrink-0 border-chart-4/60 bg-chart-4/15 px-1 text-[10px] text-foreground"
+                >
                   FK
                 </Badge>
               ) : null}

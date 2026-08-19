@@ -49,6 +49,34 @@ export function diffStages(
   return { newTables, movedColumns }
 }
 
+/**
+ * Nombres de tabla que existen en ambas etapas con exactamente las mismas
+ * columnas de origen, en el mismo orden.
+ *
+ * Mismas columnas de origen significa misma proyección de filas
+ * (`projectTableRows` depende solo de eso), así que cualquier texto derivado
+ * de esa proyección —el conteo de filas de `NormalizedTableCard`, por
+ * ejemplo— ya se dijo una vez para esa tabla y repetirlo en la etapa
+ * siguiente no aporta nada nuevo.
+ */
+export function unchangedTableNames(
+  previous: NormalizedSchema,
+  current: NormalizedSchema,
+): ReadonlySet<string> {
+  const previousByName = new Map(previous.tables.map((table) => [table.name, table]))
+
+  const unchanged = current.tables.filter((table) => {
+    const before = previousByName.get(table.name)
+    return before !== undefined && sameColumns(before.sourceColumns, table.sourceColumns)
+  })
+
+  return new Set(unchanged.map((table) => table.name))
+}
+
+function sameColumns(before: readonly ColumnName[], after: readonly ColumnName[]): boolean {
+  return before.length === after.length && before.every((column, index) => column === after[index])
+}
+
 /** Para cada columna, en qué tablas del esquema aparece. */
 function tablesByColumn(schema: NormalizedSchema): Map<ColumnName, ReadonlySet<string>> {
   const byColumn = new Map<ColumnName, Set<string>>()

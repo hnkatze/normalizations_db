@@ -1,6 +1,7 @@
 import type { ChangeEvent, DragEvent, RefObject } from "react"
 import { useEffect, useRef, useState } from "react"
-import { CircleCheck, InfoIcon, Upload, XIcon } from "lucide-react"
+import { CircleCheck, InfoIcon, ListOrdered, Sparkles, Upload, XIcon } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,6 +15,13 @@ export type SelectedSqlFile = {
   readonly sizeBytes: number
 }
 
+/**
+ * Cómo llegar a 3FN: sola la aplicación, o confirmando cada paso. Una unión
+ * de literales y no un booleano porque va a crecer — por ejemplo un modo
+ * mixto que solo pregunte lo ambiguo.
+ */
+export type NormalizationMode = "automatic" | "manual"
+
 type UploadHeroProps = {
   /**
    * El h1 de este hero es el destino del foco al entrar en el paso "upload".
@@ -25,6 +33,8 @@ type UploadHeroProps = {
   readonly selectedFile: SelectedSqlFile | null
   readonly resetToken: number
   readonly parseState: ParseState
+  readonly mode: NormalizationMode
+  readonly onModeChange: (mode: NormalizationMode) => void
   readonly onFileChange: (file: File) => void
   readonly onClear: () => void
   readonly onAnalyze: () => void
@@ -47,6 +57,63 @@ const UPLOAD_STEPS: readonly { readonly title: string; readonly detail: string }
 ]
 
 /**
+ * Los dos modos, con lo que cada uno gana y lo que pierde. Escrito para
+ * alguien que recién está aprendiendo qué es una dependencia funcional, así
+ * que nombra la clave y la dependencia en vez de dar por sabido el término.
+ */
+const NORMALIZATION_MODE_OPTIONS: readonly {
+  readonly mode: NormalizationMode
+  readonly title: string
+  readonly detail: string
+  readonly icon: LucideIcon
+  /** Color decorativo del ícono: fijo por modo, no depende de ningún dato del usuario. */
+  readonly iconClassName: string
+  /**
+   * Clases completas para el estado seleccionado, el hover y el radio de esta
+   * tarjeta, en el mismo acento que el ícono — refuerza una distinción que ya
+   * existe, no inventa una nueva. Van literales y no armadas por
+   * interpolación: ver la nota de `UPLOAD_STEP_ACCENTS` sobre por qué
+   * Tailwind necesita el string completo en el código fuente.
+   */
+  readonly selectedClassName: string
+  readonly hoverClassName: string
+  readonly radioBorderClassName: string
+  readonly radioDotClassName: string
+}[] = [
+  {
+    mode: "automatic",
+    title: "Normalizar automático",
+    detail:
+      "La aplicación detecta sola la clave primaria y las dependencias funcionales, y arma el esquema hasta 3FN sin preguntarle nada. Gana velocidad; pierde la posibilidad de confirmar o corregir cada decisión.",
+    icon: Sparkles,
+    iconClassName: "text-chart-2",
+    selectedClassName: "border-chart-2 bg-chart-2/10",
+    hoverClassName: "hover:border-chart-2/60 hover:bg-chart-2/5",
+    radioBorderClassName: "border-chart-2",
+    radioDotClassName: "bg-chart-2",
+  },
+  {
+    mode: "manual",
+    title: "Recorrido paso a paso",
+    detail:
+      "Usted confirma la clave primaria y cada dependencia funcional antes de avanzar de 1FN a 3FN. Gana entender por qué cada tabla queda como queda; pierde velocidad frente al automático.",
+    icon: ListOrdered,
+    iconClassName: "text-chart-5",
+    selectedClassName: "border-chart-5 bg-chart-5/10",
+    hoverClassName: "hover:border-chart-5/60 hover:bg-chart-5/5",
+    radioBorderClassName: "border-chart-5",
+    radioDotClassName: "bg-chart-5",
+  },
+]
+
+/**
+ * Color decorativo por posición del paso (01/02/03): siempre los mismos tres
+ * pasos en el mismo orden, así que el color es un adorno fijo y no una
+ * codificación de datos.
+ */
+const UPLOAD_STEP_ACCENTS: readonly string[] = ["bg-chart-1", "bg-chart-3", "bg-chart-5"]
+
+/**
  * Animación de entrada compartida por los cuatro bloques del hero (título,
  * párrafo, zona de drop y pie). La clase no cambia entre renders, así que la
  * animación CSS se reproduce una única vez, al montar.
@@ -64,6 +131,8 @@ export function UploadHero({
   selectedFile,
   resetToken,
   parseState,
+  mode,
+  onModeChange,
   onFileChange,
   onClear,
   onAnalyze,
@@ -253,7 +322,10 @@ export function UploadHero({
               0FN <span aria-hidden="true">&rarr;</span>
               <span className="sr-only">a</span> 3FN
             </span>
-            <span aria-hidden="true" className="h-px flex-1 bg-border" />
+            <span
+              aria-hidden="true"
+              className="h-0.5 flex-1 bg-gradient-to-r from-primary/70 via-chart-3/55 to-transparent"
+            />
           </div>
 
           <h1
@@ -287,13 +359,22 @@ export function UploadHero({
           <ol
             className={cn(
               ENTRANCE_ANIMATION,
-              "delay-150 mt-7 short:mt-4 grid gap-x-6 gap-y-3 border-t border-border pt-5 short:pt-3 sm:grid-cols-3"
+              "delay-150 mt-7 short:mt-4 grid gap-x-6 gap-y-3 border-t-2 border-primary/35 pt-5 short:pt-3 sm:grid-cols-3"
             )}
           >
             {UPLOAD_STEPS.map((step, index) => (
               <li key={step.title} className="flex gap-3">
-                <span aria-hidden="true" className="font-mono text-xs leading-5 text-primary">
-                  {String(index + 1).padStart(2, "0")}
+                <span className="flex flex-col items-center gap-1">
+                  <span aria-hidden="true" className="font-mono text-xs leading-5 text-primary">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  {/* Marca puramente decorativa: los tres pasos siempre son
+                      los mismos, en el mismo orden, así que el color no
+                      codifica ningún dato. */}
+                  <span
+                    aria-hidden="true"
+                    className={cn("h-1 w-4 rounded-full", UPLOAD_STEP_ACCENTS[index])}
+                  />
                 </span>
                 <span className="flex flex-col gap-0.5">
                   <span className="text-sm font-medium text-foreground">{step.title}</span>
@@ -311,6 +392,70 @@ export function UploadHero({
             isParsing && "opacity-60 transition-opacity duration-300"
           )}
         >
+          <fieldset className="flex flex-col gap-2 rounded-sm border border-primary/20 bg-primary/5 p-3">
+            <legend className="px-1 text-sm font-medium text-foreground">
+              Elegí cómo normalizar
+            </legend>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              {NORMALIZATION_MODE_OPTIONS.map((option) => {
+                const isSelected = mode === option.mode
+                const inputId = `normalization-mode-${option.mode}`
+                const Icon = option.icon
+
+                return (
+                  <label
+                    key={option.mode}
+                    htmlFor={inputId}
+                    className={cn(
+                      "flex cursor-pointer flex-col gap-1.5 rounded-sm border border-input bg-background px-3 py-2.5 transition-colors has-[:focus-visible]:border-ring has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50",
+                      option.hoverClassName,
+                      isSelected && option.selectedClassName
+                    )}
+                  >
+                    {/* `sr-only`: el foco visible lo dibuja el `<label>` de
+                        arriba vía `has-[:focus-visible]`, nunca este input —
+                        `sr-only` recorta a 1x1px y con él el anillo de foco. */}
+                    <input
+                      type="radio"
+                      id={inputId}
+                      name="normalization-mode"
+                      value={option.mode}
+                      checked={isSelected}
+                      onChange={() => onModeChange(option.mode)}
+                      className="sr-only"
+                    />
+                    <span className="flex items-center gap-2">
+                      {/* Marca de forma, no solo de color: un círculo vacío
+                          contra uno con punto adentro sigue distinguiéndose
+                          sin depender de percibir el color. */}
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          "flex size-4 shrink-0 items-center justify-center rounded-full border",
+                          isSelected ? option.radioBorderClassName : "border-input"
+                        )}
+                      >
+                        {isSelected ? (
+                          <span className={cn("size-2 rounded-full", option.radioDotClassName)} />
+                        ) : null}
+                      </span>
+                      <Icon
+                        aria-hidden="true"
+                        focusable="false"
+                        className={cn("size-3.5 shrink-0", option.iconClassName)}
+                      />
+                      <span className="text-sm font-medium text-foreground">
+                        {option.title}
+                      </span>
+                    </span>
+                    <span className="text-xs text-muted-foreground">{option.detail}</span>
+                  </label>
+                )
+              })}
+            </div>
+          </fieldset>
+
           <label
             ref={labelRef}
             htmlFor="sql-file-input"
@@ -319,8 +464,8 @@ export function UploadHero({
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             className={cn(
-              "upload-hero-motion group relative flex min-h-52 short:min-h-36 cursor-pointer flex-col items-center justify-center gap-3 short:gap-2 rounded-sm border border-dashed border-input bg-card px-6 py-10 short:py-6 text-center transition-colors duration-200 ease-out hover:border-primary/60 hover:bg-muted/40 has-[:focus-visible]:border-ring has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50",
-              isDraggingOver && "scale-[1.01] border-primary bg-muted/50 ring-3 ring-ring/50"
+              "upload-hero-motion group relative flex min-h-52 short:min-h-36 cursor-pointer flex-col items-center justify-center gap-3 short:gap-2 rounded-sm border border-dashed border-input bg-primary/5 px-6 py-10 short:py-6 text-center transition-colors duration-200 ease-out hover:border-primary/60 hover:bg-primary/10 has-[:focus-visible]:border-ring has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50",
+              isDraggingOver && "scale-[1.01] border-primary bg-primary/15 ring-3 ring-ring/50"
             )}
           >
             <Upload
@@ -353,7 +498,7 @@ export function UploadHero({
                 {dropError}
               </p>
             ) : selectedFile ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border-l-2 border-l-primary bg-muted/50 py-2.5 pl-3 pr-2">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border-l-4 border-l-primary bg-primary/10 py-2.5 pl-3 pr-2">
                 <span id={FILE_STATUS_ID} className="flex min-w-0 items-center gap-2.5">
                   <CircleCheck
                     aria-hidden="true"

@@ -29,7 +29,7 @@ export function NormalFormVerdictCard({ verdict }: NormalFormVerdictCardProps) {
   return (
     <section
       aria-label="Diagnóstico de forma normal"
-      className="rounded-lg border border-border bg-card p-3"
+      className="rounded-lg border border-border border-l-4 border-l-primary bg-primary/6 p-3"
     >
       <div className="flex items-start gap-2">
         <VerdictIcon summary={summary} />
