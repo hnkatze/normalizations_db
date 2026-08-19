@@ -31,3 +31,19 @@ export function summarizeSchema(
     confirmedDependencyCount,
   }
 }
+
+/**
+ * La misma oración para el recorrido MANUAL (una etapa por pantalla) y para
+ * el resumen del CONJUNTO en el modo automático (una sola vez, con los
+ * números de la etapa final): es el mismo texto, solo cambia qué esquema
+ * describe.
+ */
+export function summaryLine(summary: SchemaSummary): string {
+  const newTableWord = summary.newTableCount === 1 ? "tabla nueva" : "tablas nuevas"
+  return (
+    `${summary.originalColumnCount} columnas de \`${summary.originalTableName}\` se convirtieron en ` +
+    `${summary.resultingTableCount} tablas: la fila original más ${summary.newTableCount} ` +
+    `${newTableWord} para los atributos que se repetían, a partir de ${summary.confirmedDependencyCount} ` +
+    `${summary.confirmedDependencyCount === 1 ? "dependencia confirmada" : "dependencias confirmadas"}.`
+  )
+}

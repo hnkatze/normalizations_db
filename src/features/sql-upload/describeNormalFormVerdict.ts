@@ -21,6 +21,11 @@ export type NormalFormBlocker = {
 
 export type NormalFormVerdictSummary =
   | {
+      readonly status: "unnormalized"
+      readonly headline: string
+      readonly detail: string
+    }
+  | {
       readonly status: "diagnosed"
       readonly normalForm: NormalForm
       readonly headline: string
@@ -77,6 +82,14 @@ function basisClause(basis: NormalFormBasis): string {
 
 export function describeNormalFormVerdict(verdict: NormalFormVerdict): NormalFormVerdictSummary {
   switch (verdict.status) {
+    case "unnormalized":
+      return {
+        status: "unnormalized",
+        headline: "Esta tabla todavía no cumple 1FN",
+        detail:
+          "Se detectaron grupos repetitivos o valores no atómicos. " +
+          "Corrija primero esas violaciones antes de evaluar 2FN y 3FN.",
+      }
     case "undiagnosable":
       return {
         status: "undiagnosable",

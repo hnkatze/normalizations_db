@@ -29,7 +29,7 @@ export function NormalFormVerdictCard({ verdict }: NormalFormVerdictCardProps) {
   return (
     <section
       aria-label="Diagnóstico de forma normal"
-      className="rounded-lg border border-border bg-card p-3"
+      className="rounded-lg border border-border border-l-4 border-l-primary bg-primary/6 p-3"
     >
       <div className="flex items-start gap-2">
         <VerdictIcon summary={summary} />
@@ -73,6 +73,14 @@ type VerdictIconProps = {
 /** El icono depende de si hay algo que resolver, no solo de si hubo diagnóstico. */
 function VerdictIcon({ summary }: VerdictIconProps) {
   switch (summary.status) {
+    case "unnormalized":
+      return (
+        <TriangleAlertIcon
+          aria-hidden="true"
+          focusable="false"
+          className="mt-0.5 size-4 shrink-0 text-foreground"
+        />
+      )
     case "undiagnosable":
       return (
         <InfoIcon

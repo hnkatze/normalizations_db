@@ -39,6 +39,28 @@ describe("summarizeSchemaNormalization", () => {
     expect(undiagnosable).toBe(1)
   })
 
+  it("reporta por debajo de 1FN una tabla con grupos repetitivos", () => {
+    const report = summarizeSchemaNormalization([
+      table({
+        name: "contacto",
+        columns: [column("id"), column("telefono1"), column("telefono2")],
+        primaryKey: ["id"],
+        rows: [{ id: "1", telefono1: "1111-1111", telefono2: "2222-2222" }],
+      }),
+    ])
+
+    const [contacto] = report.tables
+    expect(contacto.verdict).toEqual({
+      status: "unnormalized",
+      reason: "first-normal-form-violations",
+    })
+    expect(contacto.summary.status).toBe("unnormalized")
+    expect(contacto.blockerCount).toBeGreaterThan(0)
+    expect(report.totals.unnormalized).toBe(1)
+    expect(report.totals["3NF"]).toBe(0)
+    expect(report.needsWork.map((t) => t.table)).toEqual(["contacto"])
+  })
+
   it("señala como transitiva la columna que cuelga de una clave foránea", () => {
     const report = summarizeSchemaNormalization([
       table({
@@ -176,6 +198,12 @@ describe("summarizeSchemaNormalization", () => {
 
     expect(report.tables).toEqual([])
     expect(report.needsWork).toEqual([])
-    expect(report.totals).toEqual({ "1NF": 0, "2NF": 0, "3NF": 0, undiagnosable: 0 })
+    expect(report.totals).toEqual({
+      unnormalized: 0,
+      "1NF": 0,
+      "2NF": 0,
+      "3NF": 0,
+      undiagnosable: 0,
+    })
   })
 })

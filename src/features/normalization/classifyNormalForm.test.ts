@@ -118,6 +118,19 @@ describe("classifyNormalForm", () => {
     expect(verdict.violations).toEqual([])
   })
 
+  it("no declara 3FN cuando la tabla todavía viola 1FN por un grupo repetitivo", () => {
+    const verdict = classifyNormalForm({
+      table: tableOf("id", "telefono1", "telefono2"),
+      confirmedDependencies: [],
+      primaryKey: ["id"],
+    })
+
+    expect(verdict).toEqual({
+      status: "unnormalized",
+      reason: "first-normal-form-violations",
+    })
+  })
+
   it("declara 1FN y nombra la dependencia parcial cuando la clave es compuesta", () => {
     const verdict = expectDiagnosed(
       classifyNormalForm({

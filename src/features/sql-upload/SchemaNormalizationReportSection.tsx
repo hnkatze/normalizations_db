@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 
 import { describeSchemaNormalizationReport } from "./describeSchemaNormalizationReport"
+import type { SchemaReportBucket } from "./describeSchemaNormalizationReport"
 import type { SchemaNormalizationReport } from "./summarizeSchemaNormalization"
 
 type SchemaNormalizationReportSectionProps = {
@@ -12,11 +13,15 @@ type SchemaNormalizationReportSectionProps = {
 
 /** Cómo se lee cada balde del recuento en el color de su gravedad. */
 const COUNT_VARIANTS = {
+  unnormalized: "destructive",
   "1NF": "destructive",
   "2NF": "secondary",
   "3NF": "outline",
   undiagnosable: "outline",
-} as const
+} as const satisfies Record<
+  SchemaReportBucket,
+  "destructive" | "secondary" | "outline"
+>
 
 /**
  * El diagnóstico del ARCHIVO, arriba de la elección de tabla.
@@ -56,7 +61,7 @@ export function SchemaNormalizationReportSection({
       {described.startHere.length === 0 ? null : (
         <div className="flex flex-col gap-2">
           <p className="text-xs text-muted-foreground">
-            Empezá por acá: las tablas con más entidades distintas escondidas adentro.
+            Empezá por acá: las tablas con más causas de normalización pendientes.
           </p>
           <ul role="list" className="flex flex-wrap gap-2">
             {described.startHere.map((diagnosis) => {
@@ -75,9 +80,11 @@ export function SchemaNormalizationReportSection({
                     <span className="text-xs font-normal opacity-80">
                       {diagnosis.blockerCount}{" "}
                       {diagnosis.blockerCount === 1 ? "causa" : "causas"}
-                      {diagnosis.verdict.status === "diagnosed"
-                        ? ` · ${diagnosis.verdict.normalForm}`
-                        : null}
+                      {diagnosis.verdict.status === "unnormalized"
+                        ? " · por debajo de 1FN"
+                        : diagnosis.verdict.status === "diagnosed"
+                          ? ` · ${diagnosis.verdict.normalForm}`
+                          : " · sin diagnosticar"}
                     </span>
                   </Button>
                 </li>
