@@ -398,3 +398,65 @@ def test_una_tabla_sin_unique_declara_la_lista_vacia() -> None:
     tables = _tables("CREATE TABLE simple (id INT PRIMARY KEY, nombre VARCHAR(20));")
 
     assert tables["simple"]["uniqueKeys"] == []
+
+
+def test_dos_esquemas_con_el_mismo_nombre_de_tabla_no_se_pisan() -> None:
+    """Un volcado multi-esquema declara `ventas.cliente` y `rrhh.cliente`.
+
+    Con la clave corta la segunda sobrescribía a la primera: la tabla
+    desaparecía del IR y las claves foráneas que la referenciaban quedaban
+    apuntando a columnas que no existen.
+    """
+    tables = _tables(
+        """
+        CREATE TABLE ventas.cliente (id INT PRIMARY KEY, nombre VARCHAR(50));
+        CREATE TABLE rrhh.cliente (codigo INT PRIMARY KEY, area VARCHAR(50));
+        """
+    )
+
+    assert set(tables) == {"ventas.cliente", "rrhh.cliente"}
+    assert [c["name"] for c in tables["ventas.cliente"]["columns"]] == ["id", "nombre"]
+    assert [c["name"] for c in tables["rrhh.cliente"]["columns"]] == ["codigo", "area"]
+
+
+def test_la_referencia_calificada_resuelve_al_esquema_que_nombra() -> None:
+    """`pedido` no compite por su nombre, así que lo conserva corto.
+
+    Lo que se califica es el DESTINO, que sí compite. Los dos nombres conviven
+    en la misma clave foránea y esa mezcla es deliberada.
+    """
+    tables = _tables(
+        """
+        CREATE TABLE ventas.cliente (id INT PRIMARY KEY);
+        CREATE TABLE rrhh.cliente (codigo INT PRIMARY KEY);
+        CREATE TABLE ventas.pedido (
+            id INT PRIMARY KEY,
+            cliente_id INT REFERENCES ventas.cliente(id)
+        );
+        """
+    )
+
+    assert tables["pedido"]["foreignKeys"] == [
+        {
+            "columns": ["cliente_id"],
+            "referencesTable": "ventas.cliente",
+            "referencesColumns": ["id"],
+        }
+    ]
+
+
+def test_sin_colision_el_nombre_se_queda_corto() -> None:
+    """El nombre calificado es la excepción, no la regla.
+
+    Calificar siempre cambiaría el nombre que la aplicación muestra en cada
+    archivo que hoy funciona, sin resolver ningún conflicto.
+    """
+    tables = _tables(
+        """
+        CREATE TABLE dbo.alumno (id INT PRIMARY KEY);
+        CREATE TABLE dbo.nota (id INT PRIMARY KEY, alumno_id INT REFERENCES dbo.alumno(id));
+        """
+    )
+
+    assert set(tables) == {"alumno", "nota"}
+    assert tables["nota"]["foreignKeys"][0]["referencesTable"] == "alumno"

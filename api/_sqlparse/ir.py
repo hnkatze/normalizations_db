@@ -67,6 +67,9 @@ def build_ir(raw: bytes) -> dict[str, Any]:
     for name, table in tables.items():
         table["rows"] = rows.get(name, [])
 
+    orphan_inserts = sorted(set(rows) - set(tables))
+    _collapse_unambiguous_names(tables)
+
     return {
         "encoding": decoded.encoding,
         "dialect": guess.dialect,
@@ -74,10 +77,74 @@ def build_ir(raw: bytes) -> dict[str, Any]:
         "diagnostics": {
             "unparsedStatements": len(unparsed),
             "samples": unparsed[:5],
-            "orphanInserts": sorted(set(rows) - set(tables)),
+            "orphanInserts": orphan_inserts,
             "dialectScores": guess.scores,
         },
     }
+
+
+def _qualified_name(target: exp.Expression) -> str:
+    """Nombra una tabla incluyendo su esquema cuando el SQL lo declara.
+
+    Sin el esquema, un volcado que declara `ventas.cliente` y `rrhh.cliente`
+    registra las dos bajo la misma clave: la segunda sobrescribe a la primera,
+    la tabla desaparece del IR y toda clave foránea que la referenciaba queda
+    apuntando a columnas de otra entidad. El nombre vuelve a acortarse al final
+    para las tablas que no compiten con ninguna otra.
+    """
+    if not isinstance(target, exp.Table):
+        return ""
+    schema = target.db
+    return f"{schema}.{target.name}" if schema else target.name
+
+
+def _short_name(name: str) -> str:
+    return name.rsplit(".", 1)[-1]
+
+
+def _lookup(tables: dict[str, dict[str, Any]], name: str) -> dict[str, Any] | None:
+    """Busca la tabla que un nombre designa, tolerando que omita el esquema.
+
+    Un volcado califica la declaración (`CREATE TABLE dbo.alumno`) y deja la
+    referencia pelada (`REFERENCES alumno`) con total normalidad. El respaldo
+    solo resuelve cuando hay UNA sola candidata: con el nombre repetido en dos
+    esquemas, adivinar sería peor que declarar la arista rota.
+    """
+    exact = tables.get(name)
+    if exact is not None:
+        return exact
+
+    short = _short_name(name)
+    matches = [table for key, table in tables.items() if _short_name(key) == short]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _collapse_unambiguous_names(tables: dict[str, dict[str, Any]]) -> None:
+    """Devuelve al nombre corto las tablas cuyo esquema no desambigua nada.
+
+    Calificar siempre cambiaría el nombre que la aplicación muestra en todos los
+    archivos que hoy funcionan —el caso corriente es un volcado entero bajo
+    `dbo`— sin resolver ningún conflicto. El nombre largo se reserva para las
+    tablas que de verdad compiten por el corto.
+    """
+    occurrences: dict[str, int] = {}
+    for key in tables:
+        occurrences[_short_name(key)] = occurrences.get(_short_name(key), 0) + 1
+
+    renames = {
+        key: _short_name(key) for key in tables if occurrences[_short_name(key)] == 1
+    }
+    if not renames:
+        return
+
+    for table in tables.values():
+        table["name"] = renames.get(table["name"], table["name"])
+        for foreign_key in table["foreignKeys"]:
+            referenced = foreign_key["referencesTable"]
+            foreign_key["referencesTable"] = renames.get(referenced, referenced)
+
+    for old, new in renames.items():
+        tables[new] = tables.pop(old)
 
 
 def _read_create_table(node: exp.Create) -> dict[str, Any] | None:
@@ -124,7 +191,7 @@ def _read_create_table(node: exp.Create) -> dict[str, Any] | None:
                     _append_unique_key(unique_keys, _read_unique_constraint(inner))
 
     return {
-        "name": schema.this.name,
+        "name": _qualified_name(schema.this),
         "columns": columns,
         "primaryKey": primary_key,
         "foreignKeys": [fk for fk in foreign_keys if fk["referencesTable"]],
@@ -195,9 +262,9 @@ def _read_reference(reference: exp.Expression | None) -> tuple[str, list[str]]:
     """
     target = reference.this if reference is not None else None
     if isinstance(target, exp.Schema):
-        return target.this.name, [c.name for c in target.expressions]
+        return _qualified_name(target.this), [c.name for c in target.expressions]
     if isinstance(target, exp.Table):
-        return target.name, []
+        return _qualified_name(target), []
     return "", []
 
 
@@ -235,8 +302,7 @@ def _apply_alter(node: exp.Alter, tables: dict[str, dict[str, Any]]) -> None:
     que el orden de creación no importe.
     """
     target = node.this
-    name = target.name if isinstance(target, exp.Table) else None
-    table = tables.get(name) if name else None
+    table = _lookup(tables, _qualified_name(target)) if isinstance(target, exp.Table) else None
     if table is None:
         return
 
@@ -263,7 +329,9 @@ def _apply_unique_index(node: exp.Create, tables: dict[str, dict[str, Any]]) -> 
         return
 
     target = index.args.get("table")
-    table = tables.get(target.name) if isinstance(target, exp.Table) else None
+    table = (
+        _lookup(tables, _qualified_name(target)) if isinstance(target, exp.Table) else None
+    )
     if table is None:
         return
 
@@ -295,7 +363,7 @@ def _resolve_reference_columns(tables: dict[str, dict[str, Any]]) -> None:
         resolved: list[dict[str, Any]] = []
         for foreign_key in table["foreignKeys"]:
             if not foreign_key["referencesColumns"]:
-                target = tables.get(foreign_key["referencesTable"])
+                target = _lookup(tables, foreign_key["referencesTable"])
                 foreign_key["referencesColumns"] = list(target["primaryKey"]) if target else []
             # El dominio da por sentado que `referencesColumns` se alinea
             # posicionalmente con `columns`; una arista que no puede cumplirlo
@@ -340,16 +408,19 @@ def _read_insert(
     """
     target = node.this
     if isinstance(target, exp.Schema):
-        name = target.this.name
+        name = _qualified_name(target.this)
         columns = [c.name for c in target.expressions]
     elif isinstance(target, exp.Table):
-        name = target.name
+        name = _qualified_name(target)
         columns = []
     else:
         return None, []
 
+    declared = _lookup(tables, name)
+    if declared is not None:
+        name = declared["name"]
+
     if not columns:
-        declared = tables.get(name)
         if declared is not None:
             columns = [c["name"] for c in declared["columns"]]
 
