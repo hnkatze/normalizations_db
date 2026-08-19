@@ -25,14 +25,31 @@ import { CellText } from "./CellText"
 /** Cuántas filas se muestran antes de resumir el resto. */
 const PREVIEW_ROWS = 5
 
+/**
+ * Qué tan detallado es el pie de la tabla de filas.
+ *
+ * `"full"` explica POR QUÉ el conteo es el que es (misma cantidad que el
+ * original, o cuántas se sacaron por repetidas). `"countOnly"` dice solo el
+ * número: lo usa el modo automático cuando esta etapa no movió nada respecto
+ * de la anterior, porque esa explicación ya se dio una vez para esta misma
+ * tabla y repetirla en cada etapa apilada es puro ruido.
+ */
+export type NormalizedTableCardRowCaption = "full" | "countOnly"
+
 type NormalizedTableCardProps = {
   readonly table: NormalizedTable
   /** Las filas de la tabla ORIGINAL, de donde se proyectan las de esta. */
   readonly sourceRows: readonly Row[]
+  /** @default "full" */
+  readonly rowCaption?: NormalizedTableCardRowCaption
 }
 
 /** Una tabla resultante: sus columnas, su clave primaria y sus claves foráneas como relaciones explícitas. */
-export function NormalizedTableCard({ table, sourceRows }: NormalizedTableCardProps) {
+export function NormalizedTableCard({
+  table,
+  sourceRows,
+  rowCaption = "full",
+}: NormalizedTableCardProps) {
   const primaryKeySet = new Set(table.primaryKey)
   // `SELECT DISTINCT` resuelto en memoria. La diferencia entre este número y
   // el de la tabla original ES el resultado de la descomposición: son las
@@ -49,7 +66,10 @@ export function NormalizedTableCard({ table, sourceRows }: NormalizedTableCardPr
   const preview = rows.slice(0, PREVIEW_ROWS)
 
   return (
-    <Card size="sm" className="flex flex-col gap-3">
+    // El borde superior es del MISMO color en cada tarjeta, siempre: variarlo
+    // por tabla haría pensar que el color agrupa o categoriza tablas, y no es
+    // el caso — es puro adorno, igual para todas.
+    <Card size="sm" className="flex flex-col gap-3 border-t-4 border-t-chart-1">
       <CardHeader>
         <CardTitle as="h4" className="font-mono">{table.name}</CardTitle>
         <CardDescription>
@@ -62,7 +82,11 @@ export function NormalizedTableCard({ table, sourceRows }: NormalizedTableCardPr
             desplazables deja al usuario adivinando cuál mover. */}
         <Table>
             <TableCaption>
-              {rows.length === sourceRows.length ? (
+              {rowCaption === "countOnly" ? (
+                <>
+                  {rows.length} {rows.length === 1 ? "fila" : "filas"}.
+                </>
+              ) : rows.length === sourceRows.length ? (
                 <>
                   {rows.length} {rows.length === 1 ? "fila" : "filas"}, las mismas que la
                   tabla original: esta descomposición no le sacó repetición.
@@ -83,7 +107,10 @@ export function NormalizedTableCard({ table, sourceRows }: NormalizedTableCardPr
                       <span className="flex items-center gap-1.5 font-mono text-foreground">
                         {column.name}
                         {primaryKeySet.has(column.name) ? (
-                          <Badge variant="outline" className="shrink-0">
+                          <Badge
+                            variant="outline"
+                            className="shrink-0 border-chart-1/60 bg-chart-1/15 text-foreground"
+                          >
                             PK
                           </Badge>
                         ) : null}
@@ -134,7 +161,7 @@ export function NormalizedTableCard({ table, sourceRows }: NormalizedTableCardPr
               {table.foreignKeys.map((foreignKey) => (
                 <li key={foreignKey.referencesTable} className="font-mono text-xs text-muted-foreground">
                   {table.name}.{foreignKey.columns.join(", ")}
-                  <span aria-hidden="true"> &rarr; </span>
+                  <span aria-hidden="true" className="text-chart-4"> &rarr; </span>
                   <span className="sr-only"> hace referencia a </span>
                   {foreignKey.referencesTable}.{foreignKey.referencesColumns.join(", ")}
                 </li>
