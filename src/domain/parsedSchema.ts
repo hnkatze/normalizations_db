@@ -32,6 +32,8 @@ export type ParsedTable = {
   /** La clave primaria DECLARADA en el DDL. Vacía cuando el archivo no declara ninguna. */
   readonly primaryKey: readonly ColumnName[]
   readonly foreignKeys: readonly ForeignKey[]
+  /** Restricciones `UNIQUE` DECLARADAS, una entrada por restricción. Nunca repite la PK. */
+  readonly uniqueKeys: readonly (readonly ColumnName[])[]
   readonly rows: readonly Row[]
 }
 

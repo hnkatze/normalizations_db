@@ -92,6 +92,15 @@ function isColumnDefinition(value: unknown): value is ColumnDefinition {
   )
 }
 
+/** Una restricción `UNIQUE` declarada: al menos una columna, nunca una lista vacía. */
+function isUniqueKey(value: unknown): value is readonly string[] {
+  return isStringArray(value) && value.length > 0
+}
+
+function isUniqueKeys(value: unknown): value is readonly (readonly string[])[] {
+  return Array.isArray(value) && value.every(isUniqueKey)
+}
+
 function isForeignKey(value: unknown): value is ForeignKey {
   if (!isRecord(value)) {
     return false
@@ -107,6 +116,11 @@ function isParsedTable(value: unknown): value is ParsedTable {
   if (!isRecord(value)) {
     return false
   }
+  if (value.uniqueKeys === undefined) {
+    // Front y función de lectura se despliegan por separado: un servicio
+    // desfasado que aún no emite este campo no declara ninguna clave única.
+    value.uniqueKeys = []
+  }
   return (
     typeof value.name === "string" &&
     Array.isArray(value.columns) &&
@@ -114,6 +128,7 @@ function isParsedTable(value: unknown): value is ParsedTable {
     isStringArray(value.primaryKey) &&
     Array.isArray(value.foreignKeys) &&
     value.foreignKeys.every(isForeignKey) &&
+    isUniqueKeys(value.uniqueKeys) &&
     Array.isArray(value.rows) &&
     value.rows.every(isRow)
   )

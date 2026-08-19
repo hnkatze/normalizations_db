@@ -31,9 +31,20 @@ export type NormalFormViolation = {
 }
 
 /**
- * Sin filas no hay evidencia contra la cual contrastar ninguna dependencia:
- * "ya está en 3FN" y "no se pudo verificar" son respuestas distintas, y
- * confundirlas es el bug que esta unión existe para prevenir.
+ * En qué se apoya un veredicto diagnosticado: importa tanto como el
+ * resultado, porque "en 2FN verificado contra 56 filas" y "en 2FN según lo
+ * que confirmaste, sin datos que lo contrasten" no son la misma certeza.
+ */
+export type NormalFormBasis =
+  | { readonly kind: "rows"; readonly rowCount: number }
+  | { readonly kind: "schema-only" }
+
+/**
+ * Sin filas no hay evidencia contra la cual contrastar ninguna dependencia
+ * detectada: "ya está en 3FN" y "no se pudo verificar" son respuestas
+ * distintas, y confundirlas es el bug que esta unión existe para prevenir.
+ * Una dependencia DECLARADA por el esquema y confirmada por el usuario es
+ * la excepción: no necesita filas porque no es una afirmación estadística.
  */
 export type NormalFormVerdict =
   | {
@@ -42,11 +53,23 @@ export type NormalFormVerdict =
       readonly normalForm: NormalForm
       /** Vacío exactamente cuando `normalForm` es 3FN. Parciales primero. */
       readonly violations: readonly NormalFormViolation[]
+      readonly basis: NormalFormBasis
     }
   | {
       readonly status: "undiagnosable"
       readonly reason: "no-rows"
     }
+
+/** Entrada de `classifyNormalForm`: `NormalizationInput` más lo que solo el diagnóstico necesita. */
+export type NormalFormClassificationInput = NormalizationInput & {
+  /**
+   * Dependencias que el esquema declara (clave primaria, única, prefijo de
+   * FK) y que el usuario confirmó explícitamente. Es la única base posible
+   * para diagnosticar un volcado sin filas: no llevan evidencia estadística,
+   * así que se toman tal cual, sin pasar por `hasSolidEvidence`.
+   */
+  readonly confirmedSchemaDependencies?: readonly FunctionalDependency[]
+}
 
 /**
  * Clasifica una tabla contra las dependencias confirmadas para ella.
@@ -55,18 +78,26 @@ export type NormalFormVerdict =
  * relacional por construcción, así que no hay grupos repetidos que detectar y
  * ninguna tabla puede estar "por debajo" de 1FN.
  */
-export function classifyNormalForm(input: NormalizationInput): NormalFormVerdict {
-  const { table, confirmedDependencies, primaryKey } = input
+export function classifyNormalForm(input: NormalFormClassificationInput): NormalFormVerdict {
+  const { table, confirmedDependencies, primaryKey, confirmedSchemaDependencies = [] } = input
+
+  const hasRows = table.rows.length > 0
 
   // Un export de solo esquema (DDL sin INSERT) no trae con qué contradecir
-  // ninguna dependencia. Declararla en 3FN por defecto sería mentir.
-  if (table.rows.length === 0) {
+  // ninguna dependencia DETECTADA. Sin ninguna declarada confirmada tampoco
+  // hay con qué diagnosticar, y declararla en 3FN por defecto sería mentir.
+  if (!hasRows && confirmedSchemaDependencies.length === 0) {
     return { status: "undiagnosable", reason: "no-rows" }
   }
 
+  const dependenciesToClassify = hasRows ? confirmedDependencies : confirmedSchemaDependencies
+  const basis: NormalFormBasis = hasRows
+    ? { kind: "rows", rowCount: table.rows.length }
+    : { kind: "schema-only" }
+
   const allColumns = columnNamesOf(table)
   const primaryKeySet = new Set(primaryKey)
-  const canonicalColumn = createCanonicalizer(allColumns, confirmedDependencies, primaryKey)
+  const canonicalColumn = createCanonicalizer(allColumns, dependenciesToClassify, primaryKey)
 
   /** Reordena según el orden de declaración, igual que el motor. */
   function orderColumns(columns: readonly ColumnName[]): readonly ColumnName[] {
@@ -79,8 +110,10 @@ export function classifyNormalForm(input: NormalizationInput): NormalFormVerdict
     // la dependencia se cumpla: tiene que haberse podido romper. Una tabla de
     // siete filas produce coincidencias —"vivir en León determina ser
     // vendedor"— que se cumplen y no significan nada, y descomponer por ellas
-    // fabrica tablas que los datos no piden.
-    if (!hasSolidEvidence(dependency.evidence)) {
+    // fabrica tablas que los datos no piden. Esto solo aplica a dependencias
+    // DETECTADAS: una declarada por el esquema y confirmada no tiene
+    // estadística que exigir, y `hasSolidEvidence` la descartaría siempre.
+    if (hasRows && !hasSolidEvidence(dependency.evidence)) {
       return null
     }
     // Una columna de la clave nunca se desplaza, así que nada de lo que la
@@ -109,7 +142,7 @@ export function classifyNormalForm(input: NormalizationInput): NormalFormVerdict
     return null
   }
 
-  const violations = confirmedDependencies
+  const violations = dependenciesToClassify
     .map(violationOf)
     .filter((violation): violation is NormalFormViolation => violation !== null)
 
@@ -119,7 +152,7 @@ export function classifyNormalForm(input: NormalizationInput): NormalFormVerdict
     ...violations.filter((violation) => violation.kind === "transitive"),
   ]
 
-  return { status: "diagnosed", normalForm: highestFormSatisfied(ordered), violations: ordered }
+  return { status: "diagnosed", normalForm: highestFormSatisfied(ordered), violations: ordered, basis }
 }
 
 function highestFormSatisfied(violations: readonly NormalFormViolation[]): NormalForm {

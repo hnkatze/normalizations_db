@@ -8,7 +8,7 @@
  */
 
 import type { ColumnName, NormalForm } from "@/domain"
-import type { NormalFormVerdict, NormalFormViolation } from "@/features/normalization"
+import type { NormalFormBasis, NormalFormVerdict, NormalFormViolation } from "@/features/normalization"
 
 import { normalFormLabel } from "./workspaceSteps"
 
@@ -53,6 +53,28 @@ const DETAIL_BY_FORM: Readonly<Record<NormalForm, string>> = {
     "de nada más que la clave.",
 }
 
+/**
+ * La base del diagnóstico importa tanto como el resultado: "en 2FN
+ * verificado contra 56 filas" y "en 2FN según lo que confirmaste, sin datos
+ * que lo contrasten" son certezas distintas y el usuario tiene que poder
+ * distinguirlas.
+ */
+function basisClause(basis: NormalFormBasis): string {
+  switch (basis.kind) {
+    case "rows":
+      return `Verificado contra ${basis.rowCount === 1 ? "la única fila" : `las ${basis.rowCount} filas`} del archivo.`
+    case "schema-only":
+      return (
+        "El archivo no trae filas: este diagnóstico se apoya únicamente en las " +
+        "dependencias que declaraste desde el esquema, sin datos que las contrasten."
+      )
+    default: {
+      const unhandled: never = basis
+      throw new Error(`describeNormalFormVerdict: base no contemplada ${String(unhandled)}`)
+    }
+  }
+}
+
 export function describeNormalFormVerdict(verdict: NormalFormVerdict): NormalFormVerdictSummary {
   switch (verdict.status) {
     case "undiagnosable":
@@ -61,7 +83,8 @@ export function describeNormalFormVerdict(verdict: NormalFormVerdict): NormalFor
         headline: "No se puede determinar la forma normal de esta tabla",
         detail:
           "El archivo declara la estructura de la tabla pero no incluye sentencias INSERT, " +
-          "así que no hay filas contra las cuales contrastar ninguna dependencia funcional.",
+          "así que no hay filas ni dependencias declaradas confirmadas contra las cuales " +
+          "contrastar ninguna dependencia funcional.",
       }
     case "diagnosed": {
       const nextForm = NEXT_FORM[verdict.normalForm]
@@ -72,7 +95,7 @@ export function describeNormalFormVerdict(verdict: NormalFormVerdict): NormalFor
           nextForm === null
             ? `Esta tabla ya está en ${normalFormLabel(verdict.normalForm)}`
             : `Esta tabla está en ${normalFormLabel(verdict.normalForm)}`,
-        detail: DETAIL_BY_FORM[verdict.normalForm],
+        detail: `${DETAIL_BY_FORM[verdict.normalForm]} ${basisClause(verdict.basis)}`,
         blockers: groupByDeterminant(verdict.violations),
       }
     }

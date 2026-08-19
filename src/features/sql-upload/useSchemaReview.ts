@@ -13,11 +13,21 @@ import {
   applyFunctionalDependencySuggestion,
 } from "./applyFunctionalDependencySuggestion"
 
+import type {
+  OfferableDeclaredDependency,
+} from "./offerableDeclaredDependencies"
+
 import {
   buildInitialReview,
   setDependenciesDecision,
   toggleConfirmed,
 } from "./reviewedDependencies"
+
+import {
+  buildInitialDeclaredReview,
+  toggleConfirmedDeclared,
+  type ReviewedDeclaredDependency,
+} from "./reviewedDeclaredDependencies"
 
 import type {
   FunctionalDependencySuggestion,
@@ -35,6 +45,9 @@ type SchemaReview = {
 
   readonly reviewed:
     readonly ReviewedDependency[]
+
+  readonly reviewedDeclared:
+    readonly ReviewedDeclaredDependency[]
 
   readonly toggleKeyColumn: (
     column: ColumnName,
@@ -64,6 +77,11 @@ type SchemaReview = {
       FunctionalDependency,
   ) => void
 
+  readonly toggleConfirmedDeclaredDependency: (
+    dependency:
+      OfferableDeclaredDependency,
+  ) => void
+
   readonly setGroupDecision: (
     dependencies:
       readonly FunctionalDependency[],
@@ -78,6 +96,8 @@ type SchemaReview = {
   readonly startReview: (
     dependencies:
       readonly FunctionalDependency[],
+    declaredDependencies:
+      readonly OfferableDeclaredDependency[],
   ) => void
 }
 
@@ -116,6 +136,13 @@ export function useSchemaReview():
     setReviewed,
   ] = useState<
     readonly ReviewedDependency[]
+  >([])
+
+  const [
+    reviewedDeclared,
+    setReviewedDeclared,
+  ] = useState<
+    readonly ReviewedDeclaredDependency[]
   >([])
 
   /**
@@ -264,6 +291,23 @@ export function useSchemaReview():
   }
 
   /**
+   * Alterna una declarada individual entre
+   * pendiente y confirmada.
+   */
+  function toggleConfirmedDeclaredDependency(
+    dependency:
+      OfferableDeclaredDependency,
+  ) {
+    setReviewedDeclared(
+      (current) =>
+        toggleConfirmedDeclared(
+          current,
+          dependency,
+        ),
+    )
+  }
+
+  /**
    * Aplica una decisión común a todas las
    * dependencias de un mismo determinante.
    */
@@ -316,6 +360,8 @@ export function useSchemaReview():
   function startReview(
     dependencies:
       readonly FunctionalDependency[],
+    declaredDependencies:
+      readonly OfferableDeclaredDependency[],
   ) {
     setPrimaryKey([])
 
@@ -332,6 +378,12 @@ export function useSchemaReview():
         dependencies,
       ),
     )
+
+    setReviewedDeclared(
+      buildInitialDeclaredReview(
+        declaredDependencies,
+      ),
+    )
   }
 
   return {
@@ -339,6 +391,7 @@ export function useSchemaReview():
     isPrimaryKeyConfirmed,
     primaryKeyAnnouncement,
     reviewed,
+    reviewedDeclared,
 
     toggleKeyColumn,
     applySuggestedPrimaryKey,
@@ -347,6 +400,7 @@ export function useSchemaReview():
     cancelPrimaryKeyEdit,
 
     toggleConfirmedDependency,
+    toggleConfirmedDeclaredDependency,
     setGroupDecision,
     applyDependencySuggestion,
 

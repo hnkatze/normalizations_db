@@ -10,6 +10,7 @@ function table(overrides: Partial<ParsedTable> = {}): ParsedTable {
     columns: [{ name: "id", sqlType: "integer", nullable: false }],
     primaryKey: ["id"],
     foreignKeys: [],
+    uniqueKeys: [],
     rows: [],
     ...overrides,
   }

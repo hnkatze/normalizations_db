@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest"
 
 import type { NormalForm } from "@/domain"
-import type { NormalFormVerdict, NormalFormViolation } from "@/features/normalization"
+import type { NormalFormBasis, NormalFormVerdict, NormalFormViolation } from "@/features/normalization"
 
 import { describeNormalFormVerdict, type NormalFormVerdictSummary } from "./describeNormalFormVerdict"
 
 function diagnosed(
   normalForm: NormalForm,
   violations: readonly NormalFormViolation[],
+  basis: NormalFormBasis = { kind: "rows", rowCount: 56 },
 ): NormalFormVerdict {
-  return { status: "diagnosed", normalForm, violations }
+  return { status: "diagnosed", normalForm, violations, basis }
 }
 
 /** Estrecha el resumen a la variante diagnosticada o falla el test explícitamente. */
@@ -38,6 +39,29 @@ describe("describeNormalFormVerdict", () => {
     expect(summary.status).toBe("undiagnosable")
     expect(summary.headline).not.toContain("3FN")
     expect(summary.detail).toContain("INSERT")
+  })
+
+  it("nombra la cantidad de filas contra las que se verificó un diagnóstico basado en datos", () => {
+    const summary = expectDiagnosed(
+      describeNormalFormVerdict(diagnosed("3NF", [], { kind: "rows", rowCount: 56 })),
+    )
+
+    expect(summary.detail).toContain("56 filas")
+  })
+
+  it("distingue un diagnóstico sin filas, apoyado solo en reglas declaradas confirmadas", () => {
+    const summary = expectDiagnosed(
+      describeNormalFormVerdict(
+        diagnosed(
+          "2NF",
+          [{ kind: "transitive", determinant: ["currency_id"], dependent: "currency_code" }],
+          { kind: "schema-only" },
+        ),
+      ),
+    )
+
+    expect(summary.detail).toContain("sin datos que las contrasten")
+    expect(summary.detail).not.toContain("Verificado contra")
   })
 
   it("agrupa por determinante para no repetir la misma causa", () => {

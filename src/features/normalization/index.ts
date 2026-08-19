@@ -1,5 +1,10 @@
 export { classifyNormalForm } from "./classifyNormalForm"
-export type { NormalFormVerdict, NormalFormViolation } from "./classifyNormalForm"
+export type {
+  NormalFormBasis,
+  NormalFormClassificationInput,
+  NormalFormVerdict,
+  NormalFormViolation,
+} from "./classifyNormalForm"
 export { createCanonicalizer, normalizeByStage, normalizeTo3NF } from "./normalizeTo3NF"
 export type { NormalizationStages } from "./normalizeTo3NF"
 export { generateDdl } from "./generateDdl"

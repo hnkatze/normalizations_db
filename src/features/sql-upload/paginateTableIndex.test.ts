@@ -5,7 +5,7 @@ import type { ParsedTable } from "@/domain"
 import { paginateTableIndex, TABLES_PER_PAGE } from "./paginateTableIndex"
 
 function tableNamed(name: string): ParsedTable {
-  return { name, columns: [], primaryKey: [], foreignKeys: [], rows: [] }
+  return { name, columns: [], primaryKey: [], foreignKeys: [], uniqueKeys: [], rows: [] }
 }
 
 const tables: readonly ParsedTable[] = [

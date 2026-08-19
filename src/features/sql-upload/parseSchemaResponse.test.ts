@@ -15,6 +15,7 @@ function validBody() {
         ],
         primaryKey: ["CustomerID"],
         foreignKeys: [],
+        uniqueKeys: [],
         rows: [{ CustomerID: "ALFKI", Region: null }],
       },
     ],
@@ -104,6 +105,47 @@ describe("parseSchemaResponse", () => {
   it("rejects a row carrying a value the domain cannot hold", () => {
     const body = validBody()
     body.tables[0]!.rows = [{ CustomerID: { nested: true } }] as never
+
+    expect(parseSchemaResponse(body).ok).toBe(false)
+  })
+
+  it("accepts declared unique keys using the domain vocabulary", () => {
+    const body = validBody()
+    body.tables[0]!.uniqueKeys = [["Region"]] as never
+
+    expect(parseSchemaResponse(body).ok).toBe(true)
+  })
+
+  it("rejects an empty unique key: a constraint needs at least one column", () => {
+    const body = validBody()
+    body.tables[0]!.uniqueKeys = [[]] as never
+
+    expect(parseSchemaResponse(body).ok).toBe(false)
+  })
+
+  it("treats a missing uniqueKeys as no declared unique keys, for services deployed before the field existed", () => {
+    const body = validBody()
+    const table = body.tables[0] as unknown as Record<string, unknown>
+    delete table.uniqueKeys
+
+    const result = parseSchemaResponse(body)
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.database.tables[0]?.uniqueKeys).toEqual([])
+    }
+  })
+
+  it("rejects a present uniqueKeys that is not an array", () => {
+    const body = validBody()
+    body.tables[0]!.uniqueKeys = "PK" as never
+
+    expect(parseSchemaResponse(body).ok).toBe(false)
+  })
+
+  it("rejects a unique key entry that is not an array of strings", () => {
+    const body = validBody()
+    body.tables[0]!.uniqueKeys = [[1, 2]] as never
 
     expect(parseSchemaResponse(body).ok).toBe(false)
   })

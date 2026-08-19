@@ -5,12 +5,15 @@ import type { DetectionResult, FdDecision, FunctionalDependency, ReviewedDepende
 
 import { impliedDependencyKeys } from "./attributeClosure"
 import { countReviewStatus } from "./countReviewStatus"
+import { DeclaredDependencyList } from "./DeclaredDependencyList"
 import { DependencyClassificationBanner } from "./DependencyClassificationBanner"
 import { DetectionStat } from "./DetectionStat"
 import { describeDependencyDetectionSummary } from "./describeDependencyDetectionSummary"
 import { groupDependenciesByDeterminant } from "./groupDependenciesByDeterminant"
+import type { OfferableDeclaredDependency } from "./offerableDeclaredDependencies"
 import { OptionalDependencyGroups } from "./OptionalDependencyGroups"
 import { RecommendedDependencyGroups } from "./RecommendedDependencyGroups"
+import type { ReviewedDeclaredDependency } from "./reviewedDeclaredDependencies"
 import { confirmedDependenciesOf, dependencyKey } from "./reviewedDependencies"
 import { splitRecommendedDependencyGroups } from "./splitRecommendedDependencyGroups"
 
@@ -26,6 +29,11 @@ type DependencyReviewProps = {
     dependencies: readonly FunctionalDependency[],
     decision: FdDecision,
   ) => void
+
+  /** Reglas que el DDL afirma sin depender de ninguna fila. Ver `DeclaredDependencyList`. */
+  readonly declaredDependencies: readonly OfferableDeclaredDependency[]
+  readonly reviewedDeclared: readonly ReviewedDeclaredDependency[]
+  readonly onToggleConfirmDeclared: (dependency: OfferableDeclaredDependency) => void
 }
 
 /**
@@ -43,6 +51,9 @@ export function DependencyReview({
   isPrimaryKeyConfirmed,
   onToggleConfirm,
   onSetGroupDecision,
+  declaredDependencies,
+  reviewedDeclared,
+  onToggleConfirmDeclared,
 }: DependencyReviewProps) {
   const groups = groupDependenciesByDeterminant(detection.dependencies)
 
@@ -102,6 +113,12 @@ export function DependencyReview({
             <DetectionStat label="Descartadas automáticamente" value={counts.discarded} />
           ) : null}
         </dl>
+
+        <DeclaredDependencyList
+          dependencies={declaredDependencies}
+          reviewed={reviewedDeclared}
+          onToggleConfirm={onToggleConfirmDeclared}
+        />
 
         {detection.dependencies.length === 0 ? (
           <p className="text-sm text-muted-foreground">

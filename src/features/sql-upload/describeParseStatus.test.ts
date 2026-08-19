@@ -13,6 +13,7 @@ function databaseWith(tableCount: number, rowsPerTable: number): ParsedDatabase 
       columns: [{ name: "id", sqlType: "integer", nullable: false }],
       primaryKey: ["id"],
       foreignKeys: [],
+      uniqueKeys: [],
       rows: Array.from({ length: rowsPerTable }, (_row, rowIndex) => ({ id: rowIndex })),
     })),
     diagnostics: {

@@ -20,6 +20,7 @@ function table(overrides: Partial<ParsedTable> = {}): ParsedTable {
     foreignKeys: [
       { columns: ["customer_id"], referencesTable: "customers", referencesColumns: ["id"] },
     ],
+    uniqueKeys: [],
     rows: [{ id: 1, customer_id: 7, note: null }],
     ...overrides,
   }

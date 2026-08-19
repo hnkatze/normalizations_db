@@ -22,16 +22,20 @@ import { resolveSelectedTable } from "./describeParsedTable"
 import { FirstNormalFormAnalysis } from "./FirstNormalFormAnalysis"
 import { FlatTableOverview } from "./FlatTableOverview"
 import { classifyNormalForm } from "@/features/normalization"
+import { declaredDependencyAsFunctionalDependency } from "./declaredDependencyAsFunctionalDependency"
+import { mergeConfirmedDependencies } from "./mergeConfirmedDependencies"
 import { buildNormalizationGates } from "./normalizationGates"
 import { computeNormalizationOutcome } from "./normalizationOutcome"
 import { NormalizationGateChecklist } from "./NormalizationGateChecklist"
 import { NormalFormVerdictCard } from "./NormalFormVerdictCard"
 import { NormalizedSchemaSection } from "./NormalizedSchemaSection"
 import { normalizeIssueToFirstNormalForm } from "./normalizeToFirstNormalForm"
+import { offerableDeclaredDependencies } from "./offerableDeclaredDependencies"
 import { ParsedSchemaOverview } from "./ParsedSchemaOverview"
 import { pendingTransitiveRules } from "./pendingTransitiveRules"
 import { PrimaryKeySelector } from "./PrimaryKeySelector"
 import { PrimaryKeySuggestion } from "./PrimaryKeySuggestion"
+import { confirmedDeclaredDependenciesOf } from "./reviewedDeclaredDependencies"
 import { confirmedDependenciesOf } from "./reviewedDependencies"
 import { isSchemaReviewReady } from "./schemaReadiness"
 import { suggestFunctionalDependencies } from "./suggestFunctionalDependencies"
@@ -261,12 +265,47 @@ export function SqlUploadContainer() {
       [schemaReview.reviewed],
     )
 
+  /**
+   * Las declaradas ofrecibles de la tabla activa: nunca `primary-key`, ver
+   * `offerableDeclaredDependencies`. Vacío tras una transformación de 1FN,
+   * igual que `analysis.declaredDependencies`.
+   */
+  const offerableDeclared =
+    useMemo(
+      () =>
+        analysis === null
+          ? []
+          : offerableDeclaredDependencies(
+              analysis.declaredDependencies,
+            ),
+      [analysis],
+    )
+
+  /*
+   * Las declaradas por el esquema (clave única,
+   * prefijo de FK) que el usuario confirmó. Un
+   * volcado de solo esquema no tiene otra fuente
+   * de reglas que confirmar.
+   */
+  const confirmedDeclaredDependencies =
+    useMemo(
+      () =>
+        confirmedDeclaredDependenciesOf(
+          schemaReview.reviewedDeclared,
+        ),
+      [schemaReview.reviewedDeclared],
+    )
+
+  const totalConfirmedDependencyCount =
+    confirmedDependencies.length +
+    confirmedDeclaredDependencies.length
+
   /*
    * Para abandonar 1FN se requiere:
    *
    * - que no existan violaciones detectadas;
    * - PK confirmada;
-   * - al menos una DF confirmada.
+   * - al menos una DF confirmada (detectada o declarada).
    */
   const availability: StepAvailability = {
     hasParsedFile:
@@ -280,7 +319,7 @@ export function SqlUploadContainer() {
       isSchemaReviewReady(
         schemaReview.primaryKey,
         schemaReview.isPrimaryKeyConfirmed,
-        confirmedDependencies.length,
+        totalConfirmedDependencyCount,
       ),
   }
   /*
@@ -308,10 +347,18 @@ export function SqlUploadContainer() {
 
               confirmedDependencies:
                 analysis.detection.dependencies,
+
+              // Sin filas, la única base posible del veredicto son las
+              // declaradas por el esquema que el usuario ya confirmó.
+              confirmedSchemaDependencies:
+                confirmedDeclaredDependencies.map(
+                  declaredDependencyAsFunctionalDependency,
+                ),
             }),
       [
         analysis,
         schemaReview.primaryKey,
+        confirmedDeclaredDependencies,
       ],
     )
 
@@ -320,7 +367,12 @@ export function SqlUploadContainer() {
    * motor existente.
    *
    * Lo único que cambia es que analysis.table
-   * puede ser ahora la salida válida de 1FN.
+   * puede ser ahora la salida válida de 1FN, y que
+   * las declaradas confirmadas se suman traducidas
+   * al tipo que el motor consume: es la única forma
+   * de que confirmar `currency_id -> currency_code`
+   * en un archivo de solo esquema realmente descomponga
+   * la tabla en vez de solo desbloquear la pantalla.
    */
   const outcome =
     useMemo(
@@ -336,12 +388,17 @@ export function SqlUploadContainer() {
               primaryKey:
                 schemaReview.primaryKey,
 
-              confirmedDependencies,
+              confirmedDependencies:
+                mergeConfirmedDependencies(
+                  confirmedDependencies,
+                  confirmedDeclaredDependencies,
+                ),
             }),
       [
         analysis,
         schemaReview.primaryKey,
         confirmedDependencies,
+        confirmedDeclaredDependencies,
       ],
     )
 
@@ -417,7 +474,7 @@ export function SqlUploadContainer() {
       false,
     )
 
-    schemaReview.startReview([])
+    schemaReview.startReview([], [])
   }
 
   function handleFileChange(
@@ -502,10 +559,14 @@ export function SqlUploadContainer() {
       false,
     )
 
+    const freshAnalysis =
+      analyzeParsedTable(chosen)
+
     schemaReview.startReview(
-      analyzeParsedTable(
-        chosen,
-      ).detection.dependencies,
+      freshAnalysis.detection.dependencies,
+      offerableDeclaredDependencies(
+        freshAnalysis.declaredDependencies,
+      ),
     )
 
     setAnalysisId(
@@ -738,10 +799,13 @@ export function SqlUploadContainer() {
       /*
        * Las dependencias pertenecientes a la
        * estructura anterior ya no pueden mantenerse.
+       * Tampoco las declaradas: una tabla transformada
+       * ya no es la que el archivo declaró.
        */
       schemaReview.startReview(
         transformedAnalysis.detection
           .dependencies,
+        [],
       )
 
       /*
@@ -1089,6 +1153,15 @@ export function SqlUploadContainer() {
                 onSetGroupDecision={
                   schemaReview.setGroupDecision
                 }
+                declaredDependencies={
+                  offerableDeclared
+                }
+                reviewedDeclared={
+                  schemaReview.reviewedDeclared
+                }
+                onToggleConfirmDeclared={
+                  schemaReview.toggleConfirmedDeclaredDependency
+                }
               />
             </div>
           </div>
@@ -1107,7 +1180,7 @@ export function SqlUploadContainer() {
                 .length
             }
             confirmedDependencyCount={
-              confirmedDependencies.length
+              totalConfirmedDependencyCount
             }
             primaryKeyColumnCount={
               schemaReview.primaryKey
@@ -1136,9 +1209,10 @@ export function SqlUploadContainer() {
                   schemaReview.isPrimaryKeyConfirmed
                     ? schemaReview.primaryKey
                     : [],
-                  confirmedDependencies.length,
-                  analysis.detection
-                    .dependencies.length,
+                  totalConfirmedDependencyCount,
+                  analysis.detection.dependencies
+                    .length +
+                    offerableDeclared.length,
                 )}
               />
             ) : null}

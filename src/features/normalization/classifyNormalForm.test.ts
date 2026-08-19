@@ -64,6 +64,47 @@ describe("classifyNormalForm", () => {
     expect(verdict).toEqual({ status: "undiagnosable", reason: "no-rows" })
   })
 
+  it("diagnostica una tabla sin filas cuando hay una dependencia declarada confirmada", () => {
+    // Caso real: `Orders` (84 columnas, 0 filas). El usuario confirma
+    // `currency_id -> currency_code`, declarada por el esquema, no por datos.
+    // Sin una sola fila para contradecirla igual hay con qué diagnosticar.
+    const verdict = expectDiagnosed(
+      classifyNormalForm({
+        table: {
+          name: "fixture",
+          columns: [column("order_id"), column("currency_id"), column("currency_code")],
+          rows: [],
+        },
+        confirmedDependencies: [],
+        confirmedSchemaDependencies: [
+          {
+            determinant: ["currency_id"],
+            dependent: "currency_code",
+            evidence: { groupCount: 0, rowCount: 0, maxGroupSize: 0, isTrivial: false },
+          },
+        ],
+        primaryKey: ["order_id"],
+      }),
+    )
+
+    expect(verdict.normalForm).toBe("2NF")
+    expect(verdict.violations).toEqual([
+      { kind: "transitive", determinant: ["currency_id"], dependent: "currency_code" },
+    ])
+    expect(verdict.basis).toEqual({ kind: "schema-only" })
+  })
+
+  it("sin filas y sin dependencias declaradas confirmadas, sigue siendo undiagnosable aunque haya declaradas sin confirmar", () => {
+    const verdict = classifyNormalForm({
+      table: { name: "fixture", columns: [column("a"), column("b")], rows: [] },
+      confirmedDependencies: [],
+      confirmedSchemaDependencies: [],
+      primaryKey: ["a"],
+    })
+
+    expect(verdict).toEqual({ status: "undiagnosable", reason: "no-rows" })
+  })
+
   it("declara 3FN cuando ninguna dependencia viola nada", () => {
     const verdict = expectDiagnosed(
       classifyNormalForm({

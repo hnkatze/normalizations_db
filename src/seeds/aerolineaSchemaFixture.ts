@@ -24,6 +24,7 @@ export const aerolineaSchemaFixture: ParsedDatabase = {
       ],
       primaryKey: ["codigo"],
       foreignKeys: [],
+      uniqueKeys: [],
       rows: [
         {"codigo": "TGU", "nombre": "Toncontin", "ciudad": "Tegucigalpa", "pais": "Honduras"},
         {"codigo": "SAP", "nombre": "Ramon Villeda", "ciudad": "San Pedro Sula", "pais": "Honduras"},
@@ -46,6 +47,7 @@ export const aerolineaSchemaFixture: ParsedDatabase = {
       foreignKeys: [
         { columns: ["jefe_id"], referencesTable: "empleado", referencesColumns: ["empleado_id"] },
       ],
+      uniqueKeys: [],
       rows: [
         {"empleado_id": 1, "nombre": "Ana Discua", "puesto": "Directora", "jefe_id": null},
         {"empleado_id": 2, "nombre": "Luis Mejia", "puesto": "Comandante", "jefe_id": 1},
@@ -65,6 +67,7 @@ export const aerolineaSchemaFixture: ParsedDatabase = {
       ],
       primaryKey: ["matricula"],
       foreignKeys: [],
+      uniqueKeys: [],
       rows: [
         {"matricula": "HR-AXA", "modelo": "A320", "fabricante": "Airbus", "capacidad": 180},
         {"matricula": "HR-AXB", "modelo": "A320", "fabricante": "Airbus", "capacidad": 180},
@@ -93,6 +96,7 @@ export const aerolineaSchemaFixture: ParsedDatabase = {
         { columns: ["matricula"], referencesTable: "avion", referencesColumns: ["matricula"] },
         { columns: ["comandante_id"], referencesTable: "empleado", referencesColumns: ["empleado_id"] },
       ],
+      uniqueKeys: [],
       rows: [
         {"vuelo_id": 901, "origen_codigo": "TGU", "destino_codigo": "SAP", "matricula": "HR-AXA", "comandante_id": 2, "fecha_salida": "2026-03-02"},
         {"vuelo_id": 902, "origen_codigo": "SAP", "destino_codigo": "RTB", "matricula": "HR-AXB", "comandante_id": 3, "fecha_salida": "2026-03-02"},
@@ -113,6 +117,7 @@ export const aerolineaSchemaFixture: ParsedDatabase = {
       foreignKeys: [
         { columns: ["vuelo_id"], referencesTable: "vuelo", referencesColumns: ["vuelo_id"] },
       ],
+      uniqueKeys: [],
       rows: [
         {"vuelo_id": 901, "numero_tramo": 1, "duracion_min": 45},
         {"vuelo_id": 902, "numero_tramo": 1, "duracion_min": 40},
@@ -137,6 +142,7 @@ export const aerolineaSchemaFixture: ParsedDatabase = {
         { columns: ["pasajero_id"], referencesTable: "empleado", referencesColumns: ["empleado_id"] },
         { columns: ["vuelo_id", "numero_tramo"], referencesTable: "tramo", referencesColumns: ["vuelo_id", "numero_tramo"] },
       ],
+      uniqueKeys: [],
       rows: [
         {"reserva_id": 5001, "vuelo_id": 901, "numero_tramo": 1, "pasajero_id": 5, "asiento": "12A"},
         {"reserva_id": 5002, "vuelo_id": 901, "numero_tramo": 1, "pasajero_id": 6, "asiento": "12B"},
@@ -154,6 +160,7 @@ export const aerolineaSchemaFixture: ParsedDatabase = {
       ],
       primaryKey: ["tarifa_id"],
       foreignKeys: [],
+      uniqueKeys: [],
       rows: [
         {"tarifa_id": 1, "temporada": "Semana Santa", "recargo_pct": 35},
         {"tarifa_id": 2, "temporada": "Agosto", "recargo_pct": 20},

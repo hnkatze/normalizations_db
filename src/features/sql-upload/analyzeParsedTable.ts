@@ -3,10 +3,14 @@ import type {
   FlatTable,
   ParsedTable,
 } from "@/domain"
-import type { DerivedColumn } from "@/features/fd-detection"
+import type { DeclaredFunctionalDependency, DerivedColumn } from "@/features/fd-detection"
 
 import { toFlatTable } from "@/domain"
-import { detectDerivedColumns, detectFunctionalDependencies } from "@/features/fd-detection"
+import {
+  deriveDeclaredFunctionalDependencies,
+  detectDerivedColumns,
+  detectFunctionalDependencies,
+} from "@/features/fd-detection"
 
 /**
  * Hasta dos columnas por determinante.
@@ -24,6 +28,11 @@ export type ParsedTableAnalysis = {
    * tener que acordarse de pedirlas aparte.
    */
   readonly derivedColumns: readonly DerivedColumn[]
+  /**
+   * Dependencias que el DDL ya afirma, sin mirar una fila. Vacío después de
+   * una transformación de 1FN: esa tabla ya no es la que el archivo declaró.
+   */
+  readonly declaredDependencies: readonly DeclaredFunctionalDependency[]
 }
 
 /**
@@ -50,6 +59,8 @@ export function analyzeFlatTable(
 
     derivedColumns:
       detectDerivedColumns(table),
+
+    declaredDependencies: [],
   }
 }
 
@@ -62,7 +73,15 @@ export function analyzeFlatTable(
 export function analyzeParsedTable(
   table: ParsedTable,
 ): ParsedTableAnalysis {
-  return analyzeFlatTable(
-    toFlatTable(table),
-  )
+  return {
+    ...analyzeFlatTable(
+      toFlatTable(table),
+    ),
+
+    declaredDependencies:
+      deriveDeclaredFunctionalDependencies(
+        table,
+        table.uniqueKeys,
+      ),
+  }
 }

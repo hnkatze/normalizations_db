@@ -18,7 +18,10 @@
  *    COMPUESTA: ahí hay una dependencia PARCIAL real, la que viola 2FN. Una
  *    única que no es subconjunto propio de la PK (incluida una que la
  *    duplica exactamente) es otra clave candidata más — el mismo tipo de
- *    hecho trivial que la PK — y se omite para no inflar el resultado.
+ *    hecho trivial que la PK — y se omite para no inflar el resultado. Una
+ *    única con alguna columna NULLABLE se descarta entera: SQL Server admite
+ *    un NULL en una columna `UNIQUE`, así que esa fila no tiene un valor que
+ *    la identifique y la restricción deja de ser una clave candidata real.
  * 3. Clave foránea + prefijo de nombre: heurística, no certeza. Solo aplica
  *    a FKs de UNA columna cuyo nombre termina en `_id`, porque generalizar
  *    el sufijo dispara falsos positivos que ningún DDL respalda.
@@ -132,9 +135,16 @@ function dependenciesFromUniqueConstraints(
     return []
   }
 
+  const nullableByName = new Map(columns.map((column) => [column.name, column.nullable]))
+
   const result: DeclaredFunctionalDependency[] = []
   for (const uniqueConstraint of uniqueConstraints) {
     if (!isProperSubset(uniqueConstraint, primaryKey)) {
+      continue
+    }
+    if (uniqueConstraint.some((column) => nullableByName.get(column) !== false)) {
+      // nullable=true, o la columna no aparece en `columns`: en ningún caso
+      // hay garantía de que identifique la fila, así que no es candidata.
       continue
     }
     const uniqueSet = new Set(uniqueConstraint)
@@ -207,10 +217,9 @@ function canonicalKey(dependency: DeclaredFunctionalDependency): string {
  * Deriva las dependencias funcionales que el propio DDL de `table` ya
  * declara, en orden de certeza decreciente.
  *
- * Las claves únicas viajan aparte (`uniqueConstraints`) porque `ParsedTable`
- * todavía no las expone: hoy solo trae `primaryKey` y `foreignKeys`. Cuando
- * el lector las incorpore, cablear esta función es pasar ese campo nuevo en
- * lugar de `[]`.
+ * Las claves únicas viajan aparte (`uniqueConstraints`) en vez de leerse de
+ * `table` porque `Pick` no las incluye; el llamador pasa `ParsedTable.uniqueKeys`
+ * tal cual — la nulabilidad se resuelve acá adentro, contra `table.columns`.
  *
  * @param table - columnas, PK y FKs tal como las declara el archivo leído.
  * @param uniqueConstraints - claves únicas declaradas, una por restricción.

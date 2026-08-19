@@ -18,6 +18,7 @@ const ventas: ParsedTable = {
   ],
   primaryKey: ["venta_id"],
   foreignKeys: [],
+  uniqueKeys: [],
   rows: [
     { venta_id: 1, ciudad: "Tegucigalpa", pais: "Honduras" },
     { venta_id: 2, ciudad: "Tegucigalpa", pais: "Honduras" },

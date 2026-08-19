@@ -4,8 +4,8 @@ import type { ColumnDefinition, ForeignKey, ParsedTable } from "@/domain"
 
 import { deriveDeclaredFunctionalDependencies } from "./deriveDeclaredFunctionalDependencies"
 
-function column(name: string): ColumnDefinition {
-  return { name, sqlType: "integer", nullable: false }
+function column(name: string, nullable = false): ColumnDefinition {
+  return { name, sqlType: "integer", nullable }
 }
 
 function tableOf(
@@ -14,7 +14,7 @@ function tableOf(
   foreignKeys: readonly ForeignKey[] = [],
 ): Pick<ParsedTable, "columns" | "foreignKeys" | "primaryKey"> {
   return {
-    columns: columnNames.map(column),
+    columns: columnNames.map((name) => column(name)),
     primaryKey,
     foreignKeys,
   }
@@ -77,6 +77,23 @@ describe("deriveDeclaredFunctionalDependencies", () => {
     expect(result).toEqual([
       { determinant: ["order_id", "product_id"], dependent: "quantity", origin: "primary-key" },
     ])
+  })
+
+  it("una única con una columna nullable no es clave candidata: SQL Server le permite un NULL", () => {
+    const table: Pick<ParsedTable, "columns" | "foreignKeys" | "primaryKey"> = {
+      columns: [
+        column("order_id"),
+        column("product_id"),
+        column("supplier_id", true),
+        column("quantity"),
+      ],
+      primaryKey: ["order_id", "product_id"],
+      foreignKeys: [],
+    }
+
+    const result = deriveDeclaredFunctionalDependencies(table, [["supplier_id"]])
+
+    expect(result.filter((dependency) => dependency.origin === "unique-constraint")).toEqual([])
   })
 
   it("con PK simple, ninguna única puede ser subconjunto propio: no se emite nada por esa vía", () => {
