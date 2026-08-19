@@ -9,6 +9,10 @@ normalización, sobre cualquier conjunto de datos que llegue como una sola tabla
 
 ---
 
+> **¿Venís a estudiar el proyecto o a exponerlo?** [`EXPOSICION.md`](EXPOSICION.md) reúne la
+> teoría relacional que lo sostiene, la arquitectura, las decisiones que hay que saber
+> justificar, un guión de diapositivas y las preguntas más probables con su respuesta.
+
 ## El problema, en concreto
 
 Esta es la tabla que entra. Una fila por producto de cada venta, con todo mezclado:
