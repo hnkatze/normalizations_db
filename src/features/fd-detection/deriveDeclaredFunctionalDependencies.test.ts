@@ -177,8 +177,10 @@ describe("deriveDeclaredFunctionalDependencies", () => {
   it("descarta el candidato cuando el dependiente es a su vez columna de otra FK: el prefijo no prueba una relación entre dos claves foráneas", () => {
     // Caso real: DriversLogs es un histórico, driver_id -> driver_status_id no
     // se sostiene aunque comparta prefijo con la FK hacia driver_statuses.
+    // `driver_name` comparte el mismo prefijo y NO es clave foránea: prueba que
+    // el descarte alcanza a la columna culpable y no al grupo entero.
     const table = tableOf(
-      ["log_id", "driver_id", "driver_status_id", "logged_at"],
+      ["log_id", "driver_id", "driver_status_id", "driver_name", "logged_at"],
       ["log_id"],
       [
         { columns: ["driver_id"], referencesTable: "drivers", referencesColumns: ["id"] },
@@ -188,7 +190,15 @@ describe("deriveDeclaredFunctionalDependencies", () => {
 
     const result = deriveDeclaredFunctionalDependencies(table, [])
 
-    expect(result.filter((dependency) => dependency.origin === "foreign-key-prefix")).toEqual([])
+    expect(result.filter((dependency) => dependency.origin === "foreign-key-prefix")).toEqual([
+      {
+        determinant: ["driver_id"],
+        dependent: "driver_name",
+        origin: "foreign-key-prefix",
+        foreignKey: { column: "driver_id", referencesTable: "drivers" },
+        matchedPrefix: "driver_",
+      },
+    ])
   })
 
   it("sigue emitiendo el candidato legítimo cuando el dependiente no es PK ni FK: product_id -> product_code", () => {
