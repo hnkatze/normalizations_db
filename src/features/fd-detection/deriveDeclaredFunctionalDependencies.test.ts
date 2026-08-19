@@ -157,6 +157,60 @@ describe("deriveDeclaredFunctionalDependencies", () => {
     expect(result.filter((dependency) => dependency.origin === "foreign-key-prefix")).toEqual([])
   })
 
+  it("descarta el candidato cuando el dependiente es columna de la PK, pero no descarta de más otro dependiente legítimo", () => {
+    // Caso real: Categories_Descriptions tiene una fila por idioma, así que
+    // category_id -> category_description_id es falso aunque el prefijo calce.
+    // category_name no es PK ni FK: tiene que seguir emitiéndose.
+    const table = tableOf(
+      ["category_id", "category_description_id", "category_name"],
+      ["category_description_id"],
+      [{ columns: ["category_id"], referencesTable: "categories", referencesColumns: ["id"] }],
+    )
+
+    const result = deriveDeclaredFunctionalDependencies(table, [])
+
+    const fkOrigin = result.filter((dependency) => dependency.origin === "foreign-key-prefix")
+    expect(fkOrigin.some((dependency) => dependency.dependent === "category_description_id")).toBe(false)
+    expect(fkOrigin.some((dependency) => dependency.dependent === "category_name")).toBe(true)
+  })
+
+  it("descarta el candidato cuando el dependiente es a su vez columna de otra FK: el prefijo no prueba una relación entre dos claves foráneas", () => {
+    // Caso real: DriversLogs es un histórico, driver_id -> driver_status_id no
+    // se sostiene aunque comparta prefijo con la FK hacia driver_statuses.
+    const table = tableOf(
+      ["log_id", "driver_id", "driver_status_id", "logged_at"],
+      ["log_id"],
+      [
+        { columns: ["driver_id"], referencesTable: "drivers", referencesColumns: ["id"] },
+        { columns: ["driver_status_id"], referencesTable: "driver_statuses", referencesColumns: ["id"] },
+      ],
+    )
+
+    const result = deriveDeclaredFunctionalDependencies(table, [])
+
+    expect(result.filter((dependency) => dependency.origin === "foreign-key-prefix")).toEqual([])
+  })
+
+  it("sigue emitiendo el candidato legítimo cuando el dependiente no es PK ni FK: product_id -> product_code", () => {
+    const table = tableOf(
+      ["order_id", "product_id", "product_code", "quantity"],
+      ["order_id", "product_id"],
+      [{ columns: ["product_id"], referencesTable: "products", referencesColumns: ["id"] }],
+    )
+
+    const result = deriveDeclaredFunctionalDependencies(table, [])
+
+    expect(result.filter((dependency) => dependency.origin === "foreign-key-prefix")).toEqual([
+      {
+        determinant: ["product_id"],
+        dependent: "product_code",
+        origin: "foreign-key-prefix",
+        foreignKey: { column: "product_id", referencesTable: "products" },
+        matchedPrefix: "product_",
+      },
+    ])
+  })
+
   it("cuando dos fuentes coinciden en el mismo par, se queda con la de origen más cierto", () => {
     // customer_id es subconjunto propio de la PK compuesta Y es FK con prefijo coincidente:
     // ambas fuentes producirían customer_id -> customer_name, pero solo debe aparecer una vez.

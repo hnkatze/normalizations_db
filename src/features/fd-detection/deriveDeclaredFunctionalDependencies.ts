@@ -169,8 +169,11 @@ const ID_SUFFIX_PATTERN = /_id$/i
 function dependenciesFromForeignKeyPrefixes(
   foreignKeys: readonly ForeignKey[],
   columns: readonly ColumnDefinition[],
+  primaryKey: readonly ColumnName[],
 ): readonly DeclaredFunctionalDependency[] {
   const result: DeclaredFunctionalDependency[] = []
+  const primaryKeySet = new Set(primaryKey)
+  const foreignKeyColumnSet = new Set(foreignKeys.flatMap((foreignKey) => foreignKey.columns))
 
   for (const foreignKey of foreignKeys) {
     if (foreignKey.columns.length !== 1) {
@@ -193,6 +196,17 @@ function dependenciesFromForeignKeyPrefixes(
         continue
       }
       if (!column.name.toLowerCase().startsWith(prefix)) {
+        continue
+      }
+      if (primaryKeySet.has(column.name)) {
+        // Proponer que la FK determina una columna de la PK equivale a afirmar
+        // que la FK es clave candidata; si hubiera varias filas por FK (unión,
+        // detalle por idioma), esa afirmación es falsa aunque el nombre calce.
+        continue
+      }
+      if (foreignKeyColumnSet.has(column.name)) {
+        // "FK A determina FK B" es una afirmación sobre el dominio (una FK no
+        // repite valor por fila del negocio); un prefijo compartido no la prueba.
         continue
       }
       result.push({
@@ -238,7 +252,11 @@ export function deriveDeclaredFunctionalDependencies(
       uniqueConstraints,
       table.columns,
     ),
-    "foreign-key-prefix": dependenciesFromForeignKeyPrefixes(table.foreignKeys, table.columns),
+    "foreign-key-prefix": dependenciesFromForeignKeyPrefixes(
+      table.foreignKeys,
+      table.columns,
+      table.primaryKey,
+    ),
   }
 
   // `Object.values` recorre las TRES ramas del Record sin nombrarlas: no hay
