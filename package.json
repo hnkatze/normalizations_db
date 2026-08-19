@@ -6,6 +6,7 @@
     "dev": "next dev",
     "dev:parser": "python scripts/dev_parse_server.py",
     "walkthrough": "node scripts/walkthrough.mjs .walkthrough src/seeds/seed_ventas_raw.sql",
+    "walkthrough:all": "npm run walkthrough && node scripts/walkthrough.mjs .walkthrough-multitabla src/seeds/seed_aerolinea_multitabla.sql && node scripts/walkthrough.mjs .walkthrough-esquema src/seeds/seed_ventas_solo_esquema.sql",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

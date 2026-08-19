@@ -60,3 +60,6 @@ AGENTS.md
 
 # Artefactos del navegador de inspeccion
 .playwright-mcp/
+
+# Capturas de los recorridos
+.walkthrough*/

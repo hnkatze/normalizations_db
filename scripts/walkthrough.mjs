@@ -13,10 +13,10 @@
  *   npm run dev            terminal 2
  *   npm run walkthrough    terminal 3
  *
- * Sube la semilla de referencia, elige la clave compuesta, confirma las reglas
- * del answer key y recorre 1FN, 2FN y 3FN, informando por consola cuántas
- * tablas salieron en cada etapa, si hubo desborde horizontal y cualquier error
- * que la página haya escrito en consola.
+ * Sube la semilla de referencia, comprueba el diagnóstico del ARCHIVO, elige la
+ * clave compuesta, confirma las reglas del answer key y recorre 1FN, 2FN y 3FN,
+ * informando por consola cuántas tablas salieron en cada etapa, si hubo
+ * desborde horizontal y cualquier error que la página haya escrito en consola.
  */
 import { chromium } from "playwright"
 import { mkdirSync } from "node:fs"
@@ -24,6 +24,16 @@ import { mkdirSync } from "node:fs"
 const OUT = process.argv[2] ?? "."
 const SEED = process.argv[3]
 mkdirSync(OUT, { recursive: true })
+
+/**
+ * El answer key pertenece a UNA semilla concreta.
+ *
+ * Exigirlo sobre cualquier archivo produce once fallos que no son fallos: la
+ * aerolínea no tiene por qué declarar `venta_id -> fecha_venta`. Con otra
+ * semilla el recorrido confirma lo que la aplicación ofrezca y lo informa, que
+ * es lo que se puede afirmar sin un answer key.
+ */
+const IS_REFERENCE_SEED = /seed_ventas_raw\.sql$/.test(SEED ?? "")
 
 // Las 13 dependencias del answer key: 5 parciales + 6 transitivas + 2 completas.
 const CONFIRM = [
@@ -67,7 +77,23 @@ await page.getByRole("button", { name: /analizar/i }).click()
 await page.getByRole("heading", { name: /elegí qué tabla/i }).waitFor({ timeout: 30000 })
 await shot("02-tablas")
 
-await page.getByRole("button", { name: /normalizar ventas_raw/i }).click()
+// El diagnóstico del archivo, que responde "por dónde empiezo" antes de que la
+// tabla esté elegida. Se comprueba acá porque es lo primero que se lee del paso
+// y porque ninguna prueba de unidad puede ver si quedó en pantalla.
+const reportSection = page.getByRole("region", { name: /diagnóstico del archivo/i })
+if ((await reportSection.count()) > 0) {
+  const reportText = (await reportSection.innerText()).replace(/\s+/g, " ").trim()
+  log("informe del archivo:", reportText.slice(0, 160))
+} else {
+  log("informe del archivo: AUSENTE — el paso de tablas ya no lo muestra")
+}
+
+// El nombre sale del archivo, no de una constante: el recorrido tiene que poder
+// correr sobre cualquier semilla que se le pase por argumento.
+const normalizeButton = page.getByRole("button", { name: /^normalizar /i }).first()
+const normalizeLabel = (await normalizeButton.innerText()).trim()
+await normalizeButton.click()
+log("tabla elegida:", normalizeLabel.replace(/\s+/g, " "))
 
 // 3. 1FN: la clave primaria.
 //
@@ -91,9 +117,51 @@ if ((await confirmKey.count()) > 0) {
 }
 await page.waitForTimeout(500)
 
-// 4. Confirmar las reglas del answer key.
+
+/**
+ * Declara una regla a mano, que es la única entrada posible en un archivo sin
+ * filas.
+ *
+ * Marca con `check({ force: true })` en vez de `click()`: el control real está
+ * debajo de su etiqueta y un click directo no llega a cambiar el estado —
+ * queda marcando "seleccione al menos una columna determinante" con el
+ * formulario aparentemente lleno.
+ *
+ * @returns 1 si la regla quedó declarada, 0 si no.
+ */
+async function declareRuleByHand(determinant, dependent) {
+  const determinantGroup = page.getByRole("group", { name: /columnas que determinan/i })
+  const dependentGroup = page.getByRole("group", { name: /columna determinada/i })
+  if ((await determinantGroup.count()) === 0 || (await dependentGroup.count()) === 0) {
+    problems.push("no encontré el formulario para declarar una regla a mano")
+    return 0
+  }
+
+  await page.getByLabel(/buscar columna determinante/i).fill(determinant)
+  await page.getByLabel(/buscar columna dependiente/i).fill(dependent)
+  await page.waitForTimeout(300)
+
+  try {
+    await determinantGroup.getByRole("checkbox").first().check({ force: true })
+    await dependentGroup.getByRole("radio").first().check({ force: true })
+  } catch {
+    problems.push(`no pude seleccionar ${determinant} -> ${dependent}`)
+    return 0
+  }
+
+  const declare = page.getByRole("button", { name: /declarar dependencia/i })
+  if (!(await declare.isEnabled())) {
+    problems.push("el botón de declarar quedó deshabilitado con el formulario completo")
+    return 0
+  }
+  await declare.click()
+  await page.waitForTimeout(600)
+  return 1
+}
+
+// 4. Confirmar las reglas.
 let confirmed = 0
-for (const [det, dep] of CONFIRM) {
+for (const [det, dep] of IS_REFERENCE_SEED ? CONFIRM : []) {
   const label = new RegExp(`${det}\\b[\\s\\S]*${dep}\\b|${dep}\\b[\\s\\S]*${det}\\b`)
   const box = page.getByRole("checkbox", { name: label }).first()
   if ((await box.count()) === 0) {
@@ -114,7 +182,36 @@ for (const [det, dep] of CONFIRM) {
     problems.push(`no pude marcar ${det} -> ${dep}`)
   }
 }
-log("reglas marcadas:", confirmed, "de", CONFIRM.length)
+if (IS_REFERENCE_SEED) {
+  log("reglas marcadas:", confirmed, "de", CONFIRM.length)
+} else if (!(await page.getByRole("button", { name: /^2FN/ }).first().isEnabled())) {
+  // Un volcado de SOLO ESQUEMA no ofrece ninguna regla que confirmar: sin filas
+  // no hay nada que detectar, y las reglas se declaran a mano. La señal no es
+  // la ausencia de casillas —el formulario para declarar tiene las suyas— sino
+  // que 2FN siga bloqueado con la clave ya confirmada. Es el camino que ninguna
+  // prueba de unidad puede recorrer y el que más fácil se rompe, porque depende
+  // de dos controles y un botón que se habilita solo.
+  confirmed = await declareRuleByHand("cliente_id", "cliente_nombre")
+  log(
+    confirmed > 0
+      ? "archivo sin filas: regla declarada a mano (cliente_id -> cliente_nombre)"
+      : "archivo sin filas: NO se pudo declarar la regla a mano",
+  )
+} else {
+  // Sin answer key se confirma lo que la aplicación ya trae preseleccionado y
+  // se informa el conteo: sirve para ver que el recorrido AVANZA con otro
+  // archivo, no para afirmar que la descomposición es la correcta.
+  const boxes = page.getByRole("checkbox")
+  const total = await boxes.count()
+  let preselected = 0
+  for (let index = 0; index < total; index += 1) {
+    if ((await boxes.nth(index).getAttribute("aria-checked")) === "true") {
+      preselected += 1
+    }
+  }
+  confirmed = preselected
+  log(`sin answer key para esta semilla: ${preselected} de ${total} reglas vienen preseleccionadas`)
+}
 await shot("03-1fn")
 
 // 5. Recorrer 2FN y 3FN.
