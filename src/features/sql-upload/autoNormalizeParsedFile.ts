@@ -9,6 +9,7 @@
  */
 
 import type { ParsedTable } from "@/domain"
+import { analyzeFirstNormalForm } from "@/features/normalization/analyzeFirstNormalForm"
 
 import { autoNormalizeToThirdNormalForm, type AutoNormalizeResult } from "./autoNormalizeToThirdNormalForm"
 import { summarizeSchemaNormalization, type SchemaTableDiagnosis } from "./summarizeSchemaNormalization"
@@ -43,14 +44,19 @@ export function autoNormalizeParsedFile(tables: readonly ParsedTable[]): AutoNor
   }
 
   const report = summarizeSchemaNormalization(tables)
-  // Una tabla solo-esquema (sin filas) y sin clave primaria declarada queda
-  // "undiagnosable" con `blockerCount: 0` si su nombre de columna tampoco
-  // delata una violación de 1FN: `classifyNormalForm` no tiene con qué
-  // contrastar ninguna dependencia sin filas ni PK. Por eso nunca aparece en
-  // `needsWork` y esta función jamás la elige, aunque en la revisión manual
-  // igual terminaría en `needs-manual`. No es un bug: es el mismo criterio que
-  // ya usa el informe del archivo, y este módulo no inventa uno nuevo.
-  const [chosenTable] = report.needsWork
+  // El informe global no presenta patrones numerados como violaciones de 1FN,
+  // pero el modo automático tampoco puede ignorarlos ni decidir su significado.
+  // Se agregan después de las causas confirmadas para enviarlos a revisión
+  // manual sin alterar el diagnóstico global ni su orden de prioridad.
+  const reviewRequired = report.tables.filter(
+    (_, index) =>
+      analyzeFirstNormalForm(tables[index]!).repeatingGroupCandidates.length > 0,
+  )
+  const pendingTables = [
+    ...report.needsWork,
+    ...reviewRequired.filter((diagnosis) => !report.needsWork.includes(diagnosis)),
+  ]
+  const [chosenTable] = pendingTables
 
   if (chosenTable === undefined) {
     return { kind: "nothing-to-normalize", tableCount: tables.length }
@@ -70,7 +76,7 @@ export function autoNormalizeParsedFile(tables: readonly ParsedTable[]): AutoNor
     chosenTable,
     tableCount: tables.length,
     otherTableCount: tables.length - 1,
-    pendingTableCount: report.needsWork.length - 1,
+    pendingTableCount: pendingTables.length - 1,
     result: autoNormalizeToThirdNormalForm(parsedTable),
   }
 }

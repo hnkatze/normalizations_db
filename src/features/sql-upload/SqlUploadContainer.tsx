@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils"
 import {
   analyzeFirstNormalForm,
   type FirstNormalFormIssue,
+  type FirstNormalFormRepeatingGroupCandidate,
 } from "./analyzeFirstNormalForm"
 
 import {
@@ -39,6 +40,15 @@ import { PrimaryKeySelector } from "./PrimaryKeySelector"
 import { PrimaryKeySuggestion } from "./PrimaryKeySuggestion"
 import { confirmedDeclaredDependenciesOf } from "./reviewedDeclaredDependencies"
 import { confirmedDependenciesOf } from "./reviewedDependencies"
+import {
+  decideRepeatingGroupCandidate,
+  emptyRepeatingGroupDecisions,
+  isFirstNormalFormReviewReady,
+  retainRepeatingGroupDecisions,
+  reviewRepeatingGroupCandidates,
+  type RepeatingGroupCandidateDecision,
+  type RepeatingGroupCandidateDecisions,
+} from "./reviewRepeatingGroupCandidates"
 import { isSchemaReviewReady } from "./schemaReadiness"
 import { suggestFunctionalDependencies } from "./suggestFunctionalDependencies"
 import { suggestPrimaryKey } from "./suggestPrimaryKey"
@@ -105,6 +115,13 @@ export function SqlUploadContainer() {
     firstNormalFormTable,
     setFirstNormalFormTable,
   ] = useState<FlatTable | null>(null)
+
+  const [
+    repeatingGroupDecisions,
+    setRepeatingGroupDecisions,
+  ] = useState<RepeatingGroupCandidateDecisions>(
+    emptyRepeatingGroupDecisions,
+  )
 
   const [
     firstNormalFormTransformationError,
@@ -230,9 +247,26 @@ export function SqlUploadContainer() {
       [analysis],
     )
 
+  const repeatingGroupReview =
+    useMemo(
+      () =>
+        reviewRepeatingGroupCandidates(
+          firstNormalFormAnalysis
+            ?.repeatingGroupCandidates ?? [],
+          repeatingGroupDecisions,
+        ),
+      [
+        firstNormalFormAnalysis,
+        repeatingGroupDecisions,
+      ],
+    )
+
   const firstNormalFormReady =
-    firstNormalFormAnalysis?.status ===
-    "no-violations-detected"
+    firstNormalFormAnalysis !== null &&
+    isFirstNormalFormReviewReady(
+      firstNormalFormAnalysis,
+      repeatingGroupReview,
+    )
 
   /*
    * La PK declarada en CREATE TABLE se usa
@@ -336,7 +370,8 @@ export function SqlUploadContainer() {
   /*
    * Para abandonar 1FN se requiere:
    *
-   * - que no existan violaciones detectadas;
+   * - que no existan violaciones detectadas o confirmadas;
+   * - que no queden candidatos de 1FN pendientes;
    * - PK confirmada;
    * - al menos una DF confirmada (detectada o declarada).
    */
@@ -381,6 +416,9 @@ export function SqlUploadContainer() {
               confirmedDependencies:
                 analysis.detection.dependencies,
 
+              confirmedFirstNormalFormIssues:
+                repeatingGroupReview.confirmedIssues,
+
               // Sin filas, la única base posible del veredicto son las
               // declaradas por el esquema y las declaradas a mano por el
               // usuario, ambas ya afirmadas sin depender de ninguna fila.
@@ -396,6 +434,7 @@ export function SqlUploadContainer() {
       [
         analysis,
         schemaReview.primaryKey,
+        repeatingGroupReview.confirmedIssues,
         confirmedDeclaredDependencies,
         userDeclared.entries,
       ],
@@ -550,6 +589,10 @@ export function SqlUploadContainer() {
 
     setFirstNormalFormTable(null)
 
+    setRepeatingGroupDecisions(
+      emptyRepeatingGroupDecisions(),
+    )
+
     setFirstNormalFormTransformationError(
       null,
     )
@@ -643,6 +686,10 @@ export function SqlUploadContainer() {
     )
 
     setFirstNormalFormTable(null)
+
+    setRepeatingGroupDecisions(
+      emptyRepeatingGroupDecisions(),
+    )
 
     setFirstNormalFormTransformationError(
       null,
@@ -887,8 +934,22 @@ export function SqlUploadContainer() {
           result.table,
         )
 
+      const transformedFirstNormalFormAnalysis =
+        analyzeFirstNormalForm(
+          result.table,
+        )
+
       setFirstNormalFormTable(
         result.table,
+      )
+
+      setRepeatingGroupDecisions(
+        (current) =>
+          retainRepeatingGroupDecisions(
+            current,
+            transformedFirstNormalFormAnalysis
+              .repeatingGroupCandidates,
+          ),
       )
 
       setFirstNormalFormTransformationError(
@@ -948,6 +1009,20 @@ export function SqlUploadContainer() {
           : "No fue posible realizar la transformación de Primera Forma Normal.",
       )
     }
+  }
+
+  function handleRepeatingGroupCandidateDecision(
+    candidate: FirstNormalFormRepeatingGroupCandidate,
+    decision: RepeatingGroupCandidateDecision,
+  ) {
+    setRepeatingGroupDecisions(
+      (current) =>
+        decideRepeatingGroupCandidate(
+          current,
+          candidate,
+          decision,
+        ),
+    )
   }
 
   const nextStep =
@@ -1228,6 +1303,28 @@ export function SqlUploadContainer() {
                 }
                 canTransform={
                   schemaReview.isPrimaryKeyConfirmed
+                }
+                pendingRepeatingGroupCandidates={
+                  repeatingGroupReview.pendingCandidates
+                }
+                confirmedRepeatingGroupIssues={
+                  repeatingGroupReview.confirmedIssues
+                }
+                onConfirmRepeatingGroupCandidate={(
+                  candidate,
+                ) =>
+                  handleRepeatingGroupCandidateDecision(
+                    candidate,
+                    "confirmed",
+                  )
+                }
+                onDismissRepeatingGroupCandidate={(
+                  candidate,
+                ) =>
+                  handleRepeatingGroupCandidateDecision(
+                    candidate,
+                    "dismissed",
+                  )
                 }
               />
 

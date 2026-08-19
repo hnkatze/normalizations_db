@@ -155,6 +155,14 @@ function needsManualTextFor(
           "Esta tabla necesitó más pasos de los esperados para llegar a Primera Forma Normal. " +
           "Revisala en el recorrido manual para ver violación por violación qué está pasando.",
       }
+    case "first-normal-form-review-required":
+      return {
+        headline: "La 1FN necesita una revisión manual",
+        detail:
+          "Se detectaron columnas con patrones numerados que podrían representar grupos " +
+          "repetitivos, pero sus nombres por sí solos no lo demuestran. Use el recorrido " +
+          "paso a paso para confirmarlos o descartarlos antes de continuar.",
+      }
     default: {
       const unhandled: never = reason
       throw new Error(`describeAutoNormalizeFileResult: motivo needs-manual no contemplado ${String(unhandled)}`)

@@ -185,6 +185,25 @@ describe("describeAutoNormalizeFileResult", () => {
     expect(summary.outcome.detail).not.toContain("clave primaria")
   })
 
+  it("explains that numbered columns need semantic review in the step-by-step flow", () => {
+    const result: AutoNormalizeFileResult = {
+      kind: "chosen",
+      chosenTable: diagnosis(),
+      tableCount: 1,
+      otherTableCount: 0,
+      pendingTableCount: 0,
+      result: { kind: "needs-manual", reason: "first-normal-form-review-required" },
+    }
+    const summary = describeAutoNormalizeFileResult(result)
+
+    if (summary.kind !== "chosen") throw new Error("expected chosen")
+    if (summary.outcome.kind !== "needs-manual") throw new Error("expected needs-manual")
+    expect(summary.outcome.headline).toContain("1FN")
+    expect(summary.outcome.detail).toContain("patrones numerados")
+    expect(summary.outcome.detail).toContain("recorrido paso a paso")
+    expect(summary.outcome.detail).not.toContain("violación")
+  })
+
   it("surfaces the engine error message for an error outcome", () => {
     const result: AutoNormalizeFileResult = {
       kind: "chosen",

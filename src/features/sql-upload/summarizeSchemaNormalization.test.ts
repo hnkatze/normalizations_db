@@ -39,13 +39,13 @@ describe("summarizeSchemaNormalization", () => {
     expect(undiagnosable).toBe(1)
   })
 
-  it("reporta por debajo de 1FN una tabla con grupos repetitivos", () => {
+  it("reporta por debajo de 1FN una tabla con un arreglo JSON no atómico", () => {
     const report = summarizeSchemaNormalization([
       table({
         name: "contacto",
-        columns: [column("id"), column("telefono1"), column("telefono2")],
+        columns: [column("id"), column("telefonos")],
         primaryKey: ["id"],
-        rows: [{ id: "1", telefono1: "1111-1111", telefono2: "2222-2222" }],
+        rows: [{ id: "1", telefonos: '["1111-1111","2222-2222"]' }],
       }),
     ])
 
@@ -59,6 +59,21 @@ describe("summarizeSchemaNormalization", () => {
     expect(report.totals.unnormalized).toBe(1)
     expect(report.totals["3NF"]).toBe(0)
     expect(report.needsWork.map((t) => t.table)).toEqual(["contacto"])
+  })
+
+  it("no reporta por debajo de 1FN una tabla de solo esquema por sus nombres numerados", () => {
+    const report = summarizeSchemaNormalization([
+      table({
+        name: "orders",
+        columns: [column("id"), column("telefono1"), column("telefono2")],
+        primaryKey: ["id"],
+      }),
+    ])
+
+    const [orders] = report.tables
+    expect(orders.verdict).toEqual({ status: "undiagnosable", reason: "no-rows" })
+    expect(report.totals.unnormalized).toBe(0)
+    expect(report.totals.undiagnosable).toBe(1)
   })
 
   it("señala como transitiva la columna que cuelga de una clave foránea", () => {

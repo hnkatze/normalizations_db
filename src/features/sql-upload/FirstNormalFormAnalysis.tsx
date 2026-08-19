@@ -1,13 +1,16 @@
 import {
   AlertTriangleIcon,
   CheckCircle2Icon,
+  InfoIcon,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 
+import { repeatingGroupCandidateKey } from "./analyzeFirstNormalForm"
 import type {
   FirstNormalFormAnalysis as FirstNormalFormAnalysisValue,
   FirstNormalFormIssue,
+  FirstNormalFormRepeatingGroupCandidate,
 } from "./analyzeFirstNormalForm"
 
 import { describeFirstNormalFormTransformGuidance } from "./describeFirstNormalFormTransformGuidance"
@@ -20,6 +23,23 @@ type FirstNormalFormAnalysisProps = {
   ) => void
 
   readonly canTransform?: boolean
+
+  readonly pendingRepeatingGroupCandidates:
+    readonly FirstNormalFormRepeatingGroupCandidate[]
+
+  readonly confirmedRepeatingGroupIssues:
+    readonly Extract<
+      FirstNormalFormIssue,
+      { readonly kind: "repeating-group" }
+    >[]
+
+  readonly onConfirmRepeatingGroupCandidate: (
+    candidate: FirstNormalFormRepeatingGroupCandidate,
+  ) => void
+
+  readonly onDismissRepeatingGroupCandidate: (
+    candidate: FirstNormalFormRepeatingGroupCandidate,
+  ) => void
 }
 
 type DisplayIssue =
@@ -49,14 +69,25 @@ export function FirstNormalFormAnalysis({
   analysis,
   onTransformIssue,
   canTransform = false,
+  pendingRepeatingGroupCandidates,
+  confirmedRepeatingGroupIssues,
+  onConfirmRepeatingGroupCandidate,
+  onDismissRepeatingGroupCandidate,
 }: FirstNormalFormAnalysisProps) {
   const hasViolations =
     analysis.status ===
-    "violations-detected"
+      "violations-detected" ||
+    confirmedRepeatingGroupIssues.length > 0
+
+  const hasPendingCandidates =
+    pendingRepeatingGroupCandidates.length > 0
 
   const displayIssues =
     groupIssuesForDisplay(
-      analysis.issues,
+      [
+        ...analysis.issues,
+        ...confirmedRepeatingGroupIssues,
+      ],
     )
 
   return (
@@ -64,6 +95,11 @@ export function FirstNormalFormAnalysis({
       <div className="flex items-start gap-2">
         {hasViolations ? (
           <AlertTriangleIcon
+            aria-hidden="true"
+            className="mt-0.5 size-4 shrink-0 text-foreground"
+          />
+        ) : hasPendingCandidates ? (
+          <InfoIcon
             aria-hidden="true"
             className="mt-0.5 size-4 shrink-0 text-foreground"
           />
@@ -82,25 +118,35 @@ export function FirstNormalFormAnalysis({
           <p className="mt-1 text-xs text-muted-foreground">
             {hasViolations
               ? "Se detectaron estructuras que pueden violar la Primera Forma Normal."
-              : "No se detectaron automáticamente grupos repetitivos ni valores estructurados no atómicos."}
+              : hasPendingCandidates
+                ? "Se detectaron patrones numerados que necesitan confirmación antes de decidir si representan grupos repetitivos."
+                : "No se detectaron automáticamente grupos repetitivos ni valores estructurados no atómicos."}
           </p>
         </div>
       </div>
 
-      {!hasViolations ? (
-        <div className="rounded-lg border border-border border-l-4 border-l-primary bg-primary/6 px-3 py-2">
-          <p className="text-xs text-muted-foreground">
-            Este resultado no garantiza
-            por sí solo que todos los
-            atributos sean atómicos según
-            su significado de negocio. La
-            aplicación solo puede evaluar
-            las evidencias presentes en la
-            estructura y los datos
-            analizados.
-          </p>
+      {hasPendingCandidates ? (
+        <div className="flex flex-col gap-2">
+          {pendingRepeatingGroupCandidates.map(
+            (candidate) => (
+              <RepeatingGroupCandidateCard
+                key={repeatingGroupCandidateKey(
+                  candidate,
+                )}
+                candidate={candidate}
+                onConfirm={
+                  onConfirmRepeatingGroupCandidate
+                }
+                onDismiss={
+                  onDismissRepeatingGroupCandidate
+                }
+              />
+            ),
+          )}
         </div>
-      ) : (
+      ) : null}
+
+      {hasViolations ? (
         <div className="flex flex-col gap-2">
           {displayIssues.map(
             (
@@ -125,8 +171,92 @@ export function FirstNormalFormAnalysis({
             ),
           )}
         </div>
-      )}
+      ) : null}
+
+      {!hasViolations ? (
+        <div className="rounded-lg border border-border border-l-4 border-l-primary bg-primary/6 px-3 py-2">
+          <p className="text-xs text-muted-foreground">
+            Este resultado no garantiza
+            por sí solo que todos los
+            atributos sean atómicos según
+            su significado de negocio. La
+            aplicación solo puede evaluar
+            las evidencias presentes en la
+            estructura y los datos
+            analizados.
+          </p>
+        </div>
+      ) : null}
     </section>
+  )
+}
+
+function RepeatingGroupCandidateCard({
+  candidate,
+  onConfirm,
+  onDismiss,
+}: {
+  readonly candidate:
+    FirstNormalFormRepeatingGroupCandidate
+  readonly onConfirm: (
+    candidate: FirstNormalFormRepeatingGroupCandidate,
+  ) => void
+  readonly onDismiss: (
+    candidate: FirstNormalFormRepeatingGroupCandidate,
+  ) => void
+}) {
+  return (
+    <div className="rounded-lg border border-border border-l-4 border-l-chart-3 bg-chart-3/6 px-3 py-3">
+      <p className="text-xs font-medium text-foreground">
+        Posible grupo repetitivo
+      </p>
+
+      <p className="mt-1 text-xs text-muted-foreground">
+        Las columnas{" "}
+        <span className="font-mono text-foreground">
+          {candidate.columns.join(
+            ", ",
+          )}
+        </span>{" "}
+        siguen un patrón numerado que
+        puede representar múltiples
+        ocurrencias del atributo{" "}
+        <span className="font-mono text-foreground">
+          {candidate.baseName}
+        </span>
+        , pero sus nombres por sí solos
+        no lo demuestran.
+      </p>
+
+      <p className="mt-1 text-xs text-muted-foreground">
+        Confirme su significado antes de
+        considerarlas una violación de
+        1FN.
+      </p>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button
+          type="button"
+          size="xs"
+          onClick={() =>
+            onConfirm(candidate)
+          }
+        >
+          Confirmar grupo repetitivo
+        </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          onClick={() =>
+            onDismiss(candidate)
+          }
+        >
+          No es un grupo repetitivo
+        </Button>
+      </div>
+    </div>
   )
 }
 
@@ -169,7 +299,7 @@ function IssueCard({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-xs font-medium text-foreground">
-              Grupo repetitivo detectado
+              Grupo repetitivo confirmado
             </p>
 
             <p className="mt-1 text-xs text-muted-foreground">
@@ -179,7 +309,7 @@ function IssueCard({
                   ", ",
                 )}
               </span>{" "}
-              parecen representar
+              representan
               múltiples ocurrencias del
               atributo{" "}
               <span className="font-mono text-foreground">

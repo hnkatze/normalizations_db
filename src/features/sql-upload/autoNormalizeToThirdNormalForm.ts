@@ -44,7 +44,10 @@ export type AutoNormalizeResult =
   | { readonly kind: "empty"; readonly reason: string }
   | {
       readonly kind: "needs-manual"
-      readonly reason: "no-primary-key" | "first-normal-form-loop-limit-exceeded"
+      readonly reason:
+        | "no-primary-key"
+        | "first-normal-form-review-required"
+        | "first-normal-form-loop-limit-exceeded"
     }
   | { readonly kind: "error"; readonly message: string }
   | {
@@ -72,6 +75,7 @@ type FirstNormalFormResolution =
       readonly primaryKey: readonly ColumnName[]
       readonly transformed: boolean
     }
+  | { readonly kind: "review-required" }
   | { readonly kind: "loop-limit-exceeded" }
 
 /**
@@ -90,6 +94,9 @@ function resolveFirstNormalForm(
 
   for (let iteration = 0; iteration < MAX_FIRST_NORMAL_FORM_ITERATIONS; iteration += 1) {
     const analysis = analyzeFirstNormalForm(currentTable)
+    if (analysis.repeatingGroupCandidates.length > 0) {
+      return { kind: "review-required" }
+    }
     if (analysis.status === "no-violations-detected") {
       return { kind: "resolved", table: currentTable, primaryKey: currentPrimaryKey, transformed }
     }
@@ -181,6 +188,10 @@ export function autoNormalizeToThirdNormalForm(parsedTable: ParsedTable): AutoNo
     }
 
     const firstNormalFormResolution = resolveFirstNormalForm(analysis.table, primaryKeySuggestion.columns)
+
+    if (firstNormalFormResolution.kind === "review-required") {
+      return { kind: "needs-manual", reason: "first-normal-form-review-required" }
+    }
 
     if (firstNormalFormResolution.kind === "loop-limit-exceeded") {
       return { kind: "needs-manual", reason: "first-normal-form-loop-limit-exceeded" }

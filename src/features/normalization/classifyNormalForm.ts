@@ -16,7 +16,7 @@
 import type { ColumnName, FunctionalDependency, NormalForm, NormalizationInput } from "@/domain"
 import { columnNamesOf, hasSolidEvidence } from "@/domain"
 
-import { analyzeFirstNormalForm } from "./analyzeFirstNormalForm"
+import { analyzeFirstNormalForm, type FirstNormalFormIssue } from "./analyzeFirstNormalForm"
 import { createCanonicalizer } from "./normalizeTo3NF"
 
 /**
@@ -74,6 +74,8 @@ export type NormalFormClassificationInput = NormalizationInput & {
    * así que se toman tal cual, sin pasar por `hasSolidEvidence`.
    */
   readonly confirmedSchemaDependencies?: readonly FunctionalDependency[]
+  /** Grupos numerados cuyo significado multivaluado confirmó el usuario. */
+  readonly confirmedFirstNormalFormIssues?: readonly FirstNormalFormIssue[]
 }
 
 /**
@@ -83,10 +85,19 @@ export type NormalFormClassificationInput = NormalizationInput & {
  * las supera tiene sentido diagnosticar 2FN y 3FN mediante sus dependencias.
  */
 export function classifyNormalForm(input: NormalFormClassificationInput): NormalFormVerdict {
-  const { table, confirmedDependencies, primaryKey, confirmedSchemaDependencies = [] } = input
+  const {
+    table,
+    confirmedDependencies,
+    primaryKey,
+    confirmedSchemaDependencies = [],
+    confirmedFirstNormalFormIssues = [],
+  } = input
 
   const firstNormalFormAnalysis = analyzeFirstNormalForm(table)
-  if (firstNormalFormAnalysis.status === "violations-detected") {
+  if (
+    firstNormalFormAnalysis.status === "violations-detected" ||
+    confirmedFirstNormalFormIssues.length > 0
+  ) {
     return { status: "unnormalized", reason: "first-normal-form-violations" }
   }
 

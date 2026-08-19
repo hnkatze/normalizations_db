@@ -93,7 +93,7 @@ describe("autoNormalizeToThirdNormalForm", () => {
     ])
   })
 
-  it("resolves a 1NF repeating group in a loop before deciding the rest", () => {
+  it("requires manual review before treating numbered columns as a repeating group", () => {
     const table: ParsedTable = {
       name: "clientes",
       columns: [
@@ -112,17 +112,30 @@ describe("autoNormalizeToThirdNormalForm", () => {
 
     const result = autoNormalizeToThirdNormalForm(table)
 
-    expect(result.kind).toBe("ready")
-    if (result.kind !== "ready") return
+    expect(result).toEqual({
+      kind: "needs-manual",
+      reason: "first-normal-form-review-required",
+    })
+  })
 
-    const finalTables = result.stages[2].schema.tables
-    expect(finalTables).toHaveLength(1)
-    expect(finalTables[0]?.primaryKey).toEqual(["cliente_id", "telefono_posicion"])
-    expect(finalTables[0]?.columns.map((column) => column.name)).toEqual([
-      "cliente_id",
-      "telefono_posicion",
-      "telefono",
-    ])
+  it("also requires manual review for underscore-numbered columns", () => {
+    const table: ParsedTable = {
+      name: "pedidos",
+      columns: [
+        integerColumn("id"),
+        integerColumn("producto_1", true),
+        integerColumn("producto_2", true),
+      ],
+      primaryKey: ["id"],
+      foreignKeys: [],
+      uniqueKeys: [],
+      rows: [{ id: 1, producto_1: 10, producto_2: 20 }],
+    }
+
+    expect(autoNormalizeToThirdNormalForm(table)).toEqual({
+      kind: "needs-manual",
+      reason: "first-normal-form-review-required",
+    })
   })
 
   it("returns needs-manual without inventing a key when none can be found", () => {
@@ -218,24 +231,19 @@ describe("autoNormalizeToThirdNormalForm", () => {
     expect(result.resolvedTable.rows).toEqual(table.rows)
   })
 
-  it("exposes the resolved table already expanded when 1NF resolved a repeating group", () => {
-    // Caso B: la tabla SÍ necesitó una transformación de 1FN. La tabla
-    // resuelta trae las columnas generadas (`telefono_posicion`, `telefono`)
-    // y las filas ya expandidas — no las originales, que ya no coinciden con
-    // ese esquema.
+  it("still resolves an automatically demonstrable JSON-array violation", () => {
     const table: ParsedTable = {
       name: "clientes",
       columns: [
         integerColumn("cliente_id"),
-        textColumn("telefono1", true),
-        textColumn("telefono2", true),
+        textColumn("telefonos", true),
       ],
       primaryKey: ["cliente_id"],
       foreignKeys: [],
       uniqueKeys: [],
       rows: [
-        { cliente_id: 1, telefono1: "555-0001", telefono2: "555-0002" },
-        { cliente_id: 2, telefono1: "555-0003", telefono2: null },
+        { cliente_id: 1, telefonos: '["555-0001","555-0002"]' },
+        { cliente_id: 2, telefonos: '["555-0003"]' },
       ],
     }
 
@@ -246,13 +254,13 @@ describe("autoNormalizeToThirdNormalForm", () => {
 
     expect(result.resolvedTable.columns.map((column) => column.name)).toEqual([
       "cliente_id",
-      "telefono_posicion",
-      "telefono",
+      "telefonos_posicion",
+      "telefonos_valor",
     ])
     expect(result.resolvedTable.rows).toEqual([
-      { cliente_id: 1, telefono_posicion: 1, telefono: "555-0001" },
-      { cliente_id: 1, telefono_posicion: 2, telefono: "555-0002" },
-      { cliente_id: 2, telefono_posicion: 1, telefono: "555-0003" },
+      { cliente_id: 1, telefonos_posicion: 1, telefonos_valor: "555-0001" },
+      { cliente_id: 1, telefonos_posicion: 2, telefonos_valor: "555-0002" },
+      { cliente_id: 2, telefonos_posicion: 1, telefonos_valor: "555-0003" },
     ])
   })
 

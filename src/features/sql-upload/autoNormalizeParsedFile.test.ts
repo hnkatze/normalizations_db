@@ -51,6 +51,28 @@ describe("autoNormalizeParsedFile", () => {
     expect(result).toEqual({ kind: "nothing-to-normalize", tableCount: 1 })
   })
 
+  it("no ignora una tabla con candidatos numerados y clave primaria válida", () => {
+    const clientes = table({
+      name: "clientes",
+      columns: [
+        integerColumn("id"),
+        textColumn("telefono1", true),
+        textColumn("telefono2", true),
+      ],
+      primaryKey: ["id"],
+      rows: [{ id: 1, telefono1: "555-0001", telefono2: "555-0002" }],
+    })
+
+    const result = autoNormalizeParsedFile([clientes])
+
+    expect(result.kind).toBe("chosen")
+    if (result.kind !== "chosen") return
+    expect(result.result).toEqual({
+      kind: "needs-manual",
+      reason: "first-normal-form-review-required",
+    })
+  })
+
   it("elige la tabla con más causas pendientes y reporta cuántas otras quedaron sin tocar", () => {
     const unaCausa = table({
       name: "una_causa",
@@ -189,8 +211,8 @@ describe("autoNormalizeParsedFile", () => {
   })
 
   it("propaga needs-manual sin aplanarlo cuando la tabla elegida no tiene clave primaria derivable", () => {
-    // Grupo repetitivo por nombre de columna: hay causa pendiente (1FN) sin
-    // declarar PK ni traer filas de las que se pueda inferir una.
+    // Patrón numerado pendiente de revisión, sin declarar PK ni traer filas
+    // de las que se pueda inferir una.
     const sinClave = table({
       name: "sin_clave",
       columns: [textColumn("telefono1", true), textColumn("telefono2", true)],
