@@ -6,11 +6,29 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import type { FunctionalDependency, NormalForm, Row } from "@/domain"
+import { cn } from "@/lib/utils"
+import type { NormalFormStagePresentation } from "./NormalFormStagePanel"
 import { NormalFormStagePanel } from "./NormalFormStagePanel"
 import type { NormalizationOutcome, NormalizationStageView } from "./normalizationOutcome"
-import { summarizeSchema, type SchemaSummary } from "./schemaSummary"
+import { summarizeSchema, summaryLine } from "./schemaSummary"
 
 const DDL_LABEL_ID = "normalized-ddl-label"
+
+/**
+ * Color decorativo por forma normal: siempre las mismas tres (1FN/2FN/3FN),
+ * así que el color es un adorno fijo y no una codificación de datos. Mismo
+ * trío que usa `AutoNormalizeStagedSchema` para la misma etapa, así que
+ * refuerza una sola idea en vez de inventar una nueva por pantalla.
+ *
+ * Duplicado a propósito y no importado desde `AutoNormalizeStagedSchema`:
+ * ese módulo ya importa `NormalizedSchemaSection`, y compartir la constante
+ * en cualquier dirección crearía un ciclo entre los dos.
+ */
+const NORMAL_FORM_ACCENT: Readonly<Record<NormalForm, { readonly borderL: string; readonly bg: string }>> = {
+  "1NF": { borderL: "border-l-chart-1", bg: "bg-chart-1/6" },
+  "2NF": { borderL: "border-l-chart-3", bg: "bg-chart-3/6" },
+  "3NF": { borderL: "border-l-chart-5", bg: "bg-chart-5/6" },
+}
 
 type NormalizedSchemaSectionProps = {
   readonly originalTableName: string
@@ -23,6 +41,8 @@ type NormalizedSchemaSectionProps = {
   readonly sourceRows: readonly Row[]
   /** Reglas sin decidir que 3FN usaría, para poder nombrarlas si no hizo nada. */
   readonly pendingTransitive: readonly FunctionalDependency[]
+  /** @default { kind: "standaloneStage" } */
+  readonly presentation?: NormalFormStagePresentation
 }
 
 /**
@@ -42,18 +62,32 @@ export function NormalizedSchemaSection({
   primaryKeyColumnCount,
   normalForm,
   outcome,
+  presentation = { kind: "standaloneStage" },
 }: NormalizedSchemaSectionProps) {
   const found = stageFor(outcome, normalForm)
   const stage = found?.current ?? null
+  // El modo automático dice esto una sola vez, arriba de las tres etapas
+  // apiladas (`AutoNormalizeStagedSchema`): es una descripción del CONJUNTO,
+  // no de esta etapa en particular, y repetirla tres veces es lo que hacía
+  // que el ojo dejara de leerla.
+  const showsOwnFraming = presentation.kind === "standaloneStage"
 
   return (
-    <Card>
+    <Card
+      className={cn(
+        "border-l-4",
+        NORMAL_FORM_ACCENT[normalForm].borderL,
+        NORMAL_FORM_ACCENT[normalForm].bg,
+      )}
+    >
       <CardHeader>
         <CardTitle as="h3">Esquema en {labelOf(normalForm)}</CardTitle>
-        <CardDescription>
-          Generado en vivo a partir de la clave primaria y las reglas que confirmaste. No se
-          escribe nada en ninguna base de datos.
-        </CardDescription>
+        {showsOwnFraming ? (
+          <CardDescription>
+            Generado en vivo a partir de la clave primaria y las reglas que confirmaste. No se
+            escribe nada en ninguna base de datos.
+          </CardDescription>
+        ) : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {stage === null ? (
@@ -69,16 +103,18 @@ export function NormalizedSchemaSection({
           </p>
         ) : (
           <>
-            <p className="text-sm text-foreground">
-              {summaryLine(
-                summarizeSchema(
-                  originalTableName,
-                  originalColumnCount,
-                  stage.schema,
-                  confirmedDependencyCount,
-                ),
-              )}
-            </p>
+            {showsOwnFraming ? (
+              <p className="text-sm text-foreground">
+                {summaryLine(
+                  summarizeSchema(
+                    originalTableName,
+                    originalColumnCount,
+                    stage.schema,
+                    confirmedDependencyCount,
+                  ),
+                )}
+              </p>
+            ) : null}
 
             <NormalFormStagePanel
               stage={stage}
@@ -88,6 +124,7 @@ export function NormalizedSchemaSection({
           sourceRows={sourceRows}
           pendingTransitive={pendingTransitive}
               ddlLabelId={DDL_LABEL_ID}
+              presentation={presentation}
             />
 
             <span id={DDL_LABEL_ID} className="sr-only">
@@ -144,14 +181,4 @@ function statusMessage(outcome: NormalizationOutcome): string {
       throw new Error(`NormalizedSchemaSection: unhandled outcome ${String(_never)}`)
     }
   }
-}
-
-function summaryLine(summary: SchemaSummary): string {
-  const newTableWord = summary.newTableCount === 1 ? "tabla nueva" : "tablas nuevas"
-  return (
-    `${summary.originalColumnCount} columnas de \`${summary.originalTableName}\` se convirtieron en ` +
-    `${summary.resultingTableCount} tablas: la fila original más ${summary.newTableCount} ` +
-    `${newTableWord} para los atributos que se repetían, a partir de ${summary.confirmedDependencyCount} ` +
-    `${summary.confirmedDependencyCount === 1 ? "dependencia confirmada" : "dependencias confirmadas"}.`
-  )
 }

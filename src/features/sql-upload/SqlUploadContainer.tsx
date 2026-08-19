@@ -17,6 +17,8 @@ import {
   type ParsedTableAnalysis,
 } from "./analyzeParsedTable"
 
+import { AutomaticNormalizationResult } from "./AutomaticNormalizationResult"
+import { autoNormalizeParsedFile, type AutoNormalizeFileResult } from "./autoNormalizeParsedFile"
 import { DependencyReview } from "./DependencyReview"
 import { resolveSelectedTable } from "./describeParsedTable"
 import { FirstNormalFormAnalysis } from "./FirstNormalFormAnalysis"
@@ -45,6 +47,7 @@ import { userDeclaredDependencyAsFunctionalDependency } from "./userDeclaredDepe
 
 import {
   UploadHero,
+  type NormalizationMode,
   type SelectedSqlFile,
 } from "./UploadHero"
 
@@ -70,6 +73,13 @@ export function SqlUploadContainer() {
 
   const [requestedStep, setRequestedStep] =
     useState<WorkspaceStep>("upload")
+
+  /*
+   * Por defecto "manual": es el recorrido que ya existe y está verificado de
+   * punta a punta. El automático es la elección explícita del usuario.
+   */
+  const [mode, setMode] =
+    useState<NormalizationMode>("manual")
 
   const [
     previewTableName,
@@ -135,10 +145,28 @@ export function SqlUploadContainer() {
   const uploadHeadingRef =
     useRef<HTMLHeadingElement>(null)
 
+  const automaticResultHeadingRef =
+    useRef<HTMLHeadingElement>(null)
+
   const database =
     parse.state.status === "ok"
       ? parse.state.database
       : null
+
+  /*
+   * Diagnostica y normaliza sola, elige la tabla más urgente. Se recalcula
+   * solo cuando cambia el archivo o el modo: `autoNormalizeParsedFile`
+   * recorre TODAS las tablas del archivo, y con cientos de tablas repetirlo
+   * en cada render por un cambio ajeno sería carísimo para nada.
+   */
+  const automaticResult =
+    useMemo<AutoNormalizeFileResult | null>(
+      () =>
+        mode === "automatic" && database !== null
+          ? autoNormalizeParsedFile(database.tables)
+          : null,
+      [mode, database],
+    )
 
   const previewTable =
     database === null
@@ -462,6 +490,51 @@ export function SqlUploadContainer() {
     })
   }, [step])
 
+  /*
+   * El modo automático se queda en el paso "upload" de principio a fin: el
+   * hero le da paso al resultado sin que `step` cambie, así que el efecto de
+   * arriba nunca dispara para esta transición. Sin este propio, el resultado
+   * aparecería en pantalla sin mover el foco ni anunciarse a quien navega
+   * por teclado o lector de pantalla.
+   */
+  const lastFocusedAutomaticResult =
+    useRef<AutoNormalizeFileResult | null>(null)
+
+  useEffect(() => {
+    if (
+      automaticResult === null ||
+      lastFocusedAutomaticResult.current === automaticResult
+    ) {
+      return
+    }
+
+    lastFocusedAutomaticResult.current = automaticResult
+
+    const heading = automaticResultHeadingRef.current
+
+    if (heading === null) {
+      return
+    }
+
+    const prefersReducedMotion =
+      window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches
+
+    heading.scrollIntoView({
+      block: "start",
+
+      behavior:
+        prefersReducedMotion
+          ? "auto"
+          : "smooth",
+    })
+
+    heading.focus({
+      preventScroll: true,
+    })
+  }, [automaticResult])
+
   const selectedFile:
     SelectedSqlFile | null =
     file
@@ -539,7 +612,15 @@ export function SqlUploadContainer() {
         sqlFile,
       )
 
-    if (result.status === "ok") {
+    /*
+     * Solo el modo manual avanza al recorrido de esquema/1FN/2FN/3FN. El
+     * automático se queda en "upload": el próximo tramo enchufa acá el
+     * resultado de `autoNormalizeParsedFile`, ver TODO más abajo.
+     */
+    if (
+      result.status === "ok" &&
+      mode === "manual"
+    ) {
       setRequestedStep("schema")
     }
   }
@@ -899,24 +980,48 @@ export function SqlUploadContainer() {
         />
       )}
 
-      <h2
-        ref={stepHeadingRef}
-        tabIndex={-1}
-        className={cn(
-          "font-heading text-lg font-semibold tracking-tight text-foreground",
-          "focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring",
-          step === "upload" &&
-            "sr-only",
-        )}
-      >
-        {headingFor(
-          step,
-          analysis,
-        )}
-      </h2>
+      {automaticResult !== null ? null : (
+        // El resultado automático trae su propio `<h1>` visible
+        // (`AutomaticNormalizationResult`): un segundo encabezado acá, aunque
+        // sea `sr-only`, duplicaría el título de la vista y además llegaría
+        // ANTES que ese `<h1>` en el árbol de accesibilidad.
+        <h2
+          ref={stepHeadingRef}
+          tabIndex={-1}
+          className={cn(
+            "font-heading text-lg font-semibold tracking-tight text-foreground",
+            "focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring",
+            step === "upload" &&
+              "sr-only",
+          )}
+        >
+          {headingFor(
+            step,
+            analysis,
+          )}
+        </h2>
+      )}
 
       <div className="flex min-h-0 flex-1 flex-col">
-        {step === "upload" ? (
+        {automaticResult !== null ? (
+          // El resultado automático REEMPLAZA al hero: convivir con él
+          // duplicaría la zona de carga de archivo mientras ya hay uno
+          // cargado, y el resultado trae su propia acción para cargar otro.
+          <AutomaticNormalizationResult
+            headingRef={
+              automaticResultHeadingRef
+            }
+            result={
+              automaticResult
+            }
+            onLoadAnotherFile={
+              handleClear
+            }
+            onReviewManually={
+              handleAnalyzeTable
+            }
+          />
+        ) : step === "upload" ? (
           <UploadHero
             headingRef={
               uploadHeadingRef
@@ -929,6 +1034,10 @@ export function SqlUploadContainer() {
             }
             parseState={
               parse.state
+            }
+            mode={mode}
+            onModeChange={
+              setMode
             }
             onFileChange={
               handleFileChange
@@ -1247,7 +1356,7 @@ export function SqlUploadContainer() {
       </div>
 
       {step === "upload" ? null : (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t-2 border-chart-3/25 pt-3">
           <div className="min-w-0">
             {step === "1NF" &&
             nextStep === null &&

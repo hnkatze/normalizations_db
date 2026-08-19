@@ -42,7 +42,7 @@ export function PrimaryKeySuggestion({
 }: PrimaryKeySuggestionProps) {
   if (suggestion.kind === "none") {
     return (
-      <div className="rounded-lg border border-border bg-muted/40 px-3 py-3">
+      <div className="rounded-lg border border-border border-l-4 border-l-primary bg-primary/6 px-3 py-3">
         <p className="text-xs font-medium text-foreground">
           No se pudo sugerir una clave primaria automáticamente.
         </p>

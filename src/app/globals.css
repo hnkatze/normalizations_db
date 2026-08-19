@@ -126,11 +126,20 @@
      (4.05:1), background (4.49:1) y card (4.76:1). Calculado, no estimado.
      Aclararlo por estética rompe 1.4.11 sobre `bg-muted`, como la zona de drop. */
   --ring: oklch(0.55 0.10 250);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  /* Paleta decorativa de datos: extiende el matiz azul del primario (250) y el
+     dorado del acento (75) con teal, terracota y violeta. Sin significado
+     propio — no codifican estado ni categoría de datos del usuario — y
+     validada con el script de paletas del skill de dataviz contra `--background`
+     (#f9f6f1) Y `--card` (#fffdfa): banda de luminosidad, piso de croma,
+     separación para daltonismo (peor par ΔE 10.7 deutan), piso de visión
+     normal (ΔE 19.4) y contraste ≥3:1 en los cinco. El dorado (chart-2) ya
+     había sido corregido una vez por no pasar contraste; no aclarar sin
+     revalidar. */
+  --chart-1: oklch(0.55 0.13 250); /* azul      #2a75ba */
+  --chart-2: oklch(0.63 0.13 75); /* dorado    #b67c0d */
+  --chart-3: oklch(0.60 0.11 185); /* teal      #009589 */
+  --chart-4: oklch(0.58 0.14 35); /* terracota #be563d */
+  --chart-5: oklch(0.55 0.13 305); /* violeta   #835bae */
   /* 6px, no 12px. El radio grande y uniforme en cada caja es la firma visual
      del panel genérico; un radio corto lee como documento técnico. La escala
      entera se deriva de acá, así que este número solo reescala toda la app. */
