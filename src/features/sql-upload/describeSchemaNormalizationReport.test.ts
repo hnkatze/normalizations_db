@@ -20,16 +20,33 @@ function diagnosis(overrides: Partial<SchemaTableDiagnosis> = {}): SchemaTableDi
 function report(overrides: Partial<SchemaNormalizationReport> = {}): SchemaNormalizationReport {
   return {
     tables: [],
-    totals: { "1NF": 0, "2NF": 0, "3NF": 0, undiagnosable: 0 },
+    totals: { unnormalized: 0, "1NF": 0, "2NF": 0, "3NF": 0, undiagnosable: 0 },
     needsWork: [],
     ...overrides,
   }
 }
 
 describe("describeSchemaNormalizationReport", () => {
+  it("muestra primero las tablas que todavía no cumplen 1FN", () => {
+    const described = describeSchemaNormalizationReport(
+      report({
+        totals: { unnormalized: 2, "1NF": 1, "2NF": 0, "3NF": 4, undiagnosable: 0 },
+      }),
+    )
+
+    expect(described.counts.map((c) => c.label)).toEqual([
+      "por debajo de 1FN",
+      "en 1FN",
+      "en 3FN",
+    ])
+    expect(described.counts.map((c) => c.count)).toEqual([2, 1, 4])
+  })
+
   it("omite las formas normales en las que no cayó ninguna tabla", () => {
     const described = describeSchemaNormalizationReport(
-      report({ totals: { "1NF": 2, "2NF": 0, "3NF": 5, undiagnosable: 0 } }),
+      report({
+        totals: { unnormalized: 0, "1NF": 2, "2NF": 0, "3NF": 5, undiagnosable: 0 },
+      }),
     )
 
     expect(described.counts.map((c) => c.label)).toEqual(["en 1FN", "en 3FN"])
@@ -38,7 +55,9 @@ describe("describeSchemaNormalizationReport", () => {
 
   it("celebra el archivo cuyas tablas ya están todas en 3FN", () => {
     const described = describeSchemaNormalizationReport(
-      report({ totals: { "1NF": 0, "2NF": 0, "3NF": 4, undiagnosable: 0 } }),
+      report({
+        totals: { unnormalized: 0, "1NF": 0, "2NF": 0, "3NF": 4, undiagnosable: 0 },
+      }),
     )
 
     expect(described.headline).toBe("Las 4 tablas del archivo ya están en 3FN")
@@ -47,7 +66,9 @@ describe("describeSchemaNormalizationReport", () => {
 
   it("nombra en singular el archivo de una sola tabla", () => {
     const described = describeSchemaNormalizationReport(
-      report({ totals: { "1NF": 0, "2NF": 0, "3NF": 1, undiagnosable: 0 } }),
+      report({
+        totals: { unnormalized: 0, "1NF": 0, "2NF": 0, "3NF": 1, undiagnosable: 0 },
+      }),
     )
 
     expect(described.headline).toBe("La única tabla del archivo ya está en 3FN")
@@ -56,29 +77,29 @@ describe("describeSchemaNormalizationReport", () => {
   it("dice cuántas tablas necesitan trabajo cuando las hay", () => {
     const described = describeSchemaNormalizationReport(
       report({
-        totals: { "1NF": 2, "2NF": 1, "3NF": 5, undiagnosable: 0 },
+        totals: { unnormalized: 0, "1NF": 2, "2NF": 1, "3NF": 5, undiagnosable: 0 },
         needsWork: [diagnosis({ table: "a", blockerCount: 3 }), diagnosis({ table: "b", blockerCount: 1 })],
       }),
     )
 
-    expect(described.headline).toBe("2 de 8 tablas tienen redundancia por resolver")
+    expect(described.headline).toBe("2 de 8 tablas requieren normalización")
   })
 
   it("concuerda el verbo con las tablas afectadas, no con el total", () => {
     const described = describeSchemaNormalizationReport(
       report({
-        totals: { "1NF": 1, "2NF": 0, "3NF": 6, undiagnosable: 0 },
+        totals: { unnormalized: 0, "1NF": 1, "2NF": 0, "3NF": 6, undiagnosable: 0 },
         needsWork: [diagnosis({ table: "avion", blockerCount: 1 })],
       }),
     )
 
-    expect(described.headline).toBe("1 de 7 tablas tiene redundancia por resolver")
+    expect(described.headline).toBe("1 de 7 tablas requiere normalización")
   })
 
   it("corta la lista de por dónde empezar y avisa cuántas quedaron fuera", () => {
     const described = describeSchemaNormalizationReport(
       report({
-        totals: { "1NF": 9, "2NF": 0, "3NF": 0, undiagnosable: 0 },
+        totals: { unnormalized: 0, "1NF": 9, "2NF": 0, "3NF": 0, undiagnosable: 0 },
         needsWork: Array.from({ length: 9 }, (_, index) =>
           diagnosis({ table: `t${index}`, blockerCount: 9 - index }),
         ),
@@ -92,11 +113,25 @@ describe("describeSchemaNormalizationReport", () => {
 
   it("no promete nada sobre un archivo que no se pudo diagnosticar", () => {
     const described = describeSchemaNormalizationReport(
-      report({ totals: { "1NF": 0, "2NF": 0, "3NF": 0, undiagnosable: 3 } }),
+      report({
+        totals: { unnormalized: 0, "1NF": 0, "2NF": 0, "3NF": 0, undiagnosable: 3 },
+      }),
     )
 
     expect(described.headline).toBe("No se pudo diagnosticar ninguna de las 3 tablas del archivo")
     expect(described.counts.map((c) => c.label)).toEqual(["sin diagnosticar"])
+  })
+
+  it("no declara todo el archivo en 3FN cuando una tabla no pudo diagnosticarse", () => {
+    const described = describeSchemaNormalizationReport(
+      report({
+        totals: { unnormalized: 0, "1NF": 0, "2NF": 0, "3NF": 2, undiagnosable: 1 },
+      }),
+    )
+
+    expect(described.headline).toBe(
+      "1 tabla no se pudo diagnosticar; las otras 2 están en 3FN",
+    )
   })
 
   it("no ofrece por dónde empezar cuando el archivo trae una sola tabla", () => {
@@ -105,12 +140,22 @@ describe("describeSchemaNormalizationReport", () => {
     // solo ocupa lugar.
     const described = describeSchemaNormalizationReport(
       report({
-        totals: { "1NF": 1, "2NF": 0, "3NF": 0, undiagnosable: 0 },
-        needsWork: [diagnosis({ table: "ventas_raw", blockerCount: 10 })],
+        totals: { unnormalized: 1, "1NF": 0, "2NF": 0, "3NF": 0, undiagnosable: 0 },
+        needsWork: [
+          diagnosis({
+            table: "ventas_raw",
+            blockerCount: 1,
+            verdict: {
+              status: "unnormalized",
+              reason: "first-normal-form-violations",
+            },
+            summary: { status: "unnormalized", headline: "", detail: "" },
+          }),
+        ],
       }),
     )
 
-    expect(described.headline).toBe("1 de 1 tabla tiene redundancia por resolver")
+    expect(described.headline).toBe("1 de 1 tabla requiere normalización")
     expect(described.startHere).toEqual([])
     expect(described.remainingCount).toBe(0)
   })

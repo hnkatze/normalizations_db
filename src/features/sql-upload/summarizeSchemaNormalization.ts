@@ -21,7 +21,11 @@
 
 import type { FunctionalDependency, NormalForm, ParsedTable } from "@/domain"
 import { hasSolidEvidence } from "@/domain"
-import { classifyNormalForm, type NormalFormVerdict } from "@/features/normalization"
+import { analyzeFirstNormalForm } from "@/features/normalization/analyzeFirstNormalForm"
+import {
+  classifyNormalForm,
+  type NormalFormVerdict,
+} from "@/features/normalization/classifyNormalForm"
 
 import { analyzeParsedTable } from "./analyzeParsedTable"
 import {
@@ -46,6 +50,7 @@ export type SchemaTableDiagnosis = {
    * CAUSAS distintas, no violaciones crudas. Dos columnas colgando de la misma
    * clave foránea son una sola entidad escondida, no dos problemas; contarlas
    * de a una infla el trabajo aparente y arruina el orden con cientos de tablas.
+   * Para una tabla por debajo de 1FN cuenta los problemas detectados de 1FN.
    */
   readonly blockerCount: number
   /**
@@ -64,8 +69,9 @@ export type SchemaTableDiagnosis = {
   readonly conjecturedRuleCount: number
 }
 
-/** Cuántas tablas del archivo caen en cada forma normal. */
+/** Cuántas tablas del archivo caen en cada forma normal o estado previo. */
 export type SchemaNormalFormTotals = Readonly<Record<NormalForm, number>> & {
+  readonly unnormalized: number
   readonly undiagnosable: number
 }
 
@@ -95,10 +101,12 @@ export function summarizeSchemaNormalization(
   const totals = diagnoses.reduce<Record<string, number>>(
     (accumulator, diagnosis) => {
       const bucket =
-        diagnosis.verdict.status === "diagnosed" ? diagnosis.verdict.normalForm : "undiagnosable"
+        diagnosis.verdict.status === "diagnosed"
+          ? diagnosis.verdict.normalForm
+          : diagnosis.verdict.status
       return { ...accumulator, [bucket]: accumulator[bucket] + 1 }
     },
-    { "1NF": 0, "2NF": 0, "3NF": 0, undiagnosable: 0 },
+    { unnormalized: 0, "1NF": 0, "2NF": 0, "3NF": 0, undiagnosable: 0 },
   )
 
   return {
@@ -119,6 +127,7 @@ export function summarizeSchemaNormalization(
 
 function diagnoseTable(table: ParsedTable): SchemaTableDiagnosis {
   const analysis = analyzeParsedTable(table)
+  const firstNormalFormAnalysis = analyzeFirstNormalForm(analysis.table)
 
   // Las derivadas de la clave primaria son exactamente lo que 2FN y 3FN dan por
   // sentado: no descomponen nada, y contarlas solo diluiría las conjeturas.
@@ -158,7 +167,12 @@ function diagnoseTable(table: ParsedTable): SchemaTableDiagnosis {
     derivedRuleCount: solid.length - withoutDerivedDeterminants.length,
     verdict,
     summary,
-    blockerCount: summary.status === "diagnosed" ? summary.blockers.length : 0,
+    blockerCount:
+      verdict.status === "unnormalized"
+        ? firstNormalFormAnalysis.issues.length
+        : summary.status === "diagnosed"
+          ? summary.blockers.length
+          : 0,
   }
 }
 
