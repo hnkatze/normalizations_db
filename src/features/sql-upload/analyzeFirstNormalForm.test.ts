@@ -45,9 +45,12 @@ describe("analyzeFirstNormalForm", () => {
     )
 
     expect(result.issues).toEqual([])
+    expect(
+      result.repeatingGroupCandidates,
+    ).toEqual([])
   })
 
-  it("detects repeating numbered columns", () => {
+  it("reports repeating numbered columns as candidates, not violations", () => {
     const table: FlatTable = {
       name: "clientes",
       columns: [
@@ -79,17 +82,20 @@ describe("analyzeFirstNormalForm", () => {
     const result = analyzeFirstNormalForm(table)
 
     expect(result.status).toBe(
-      "violations-detected",
+      "no-violations-detected",
     )
 
-    expect(result.issues).toContainEqual({
-      kind: "repeating-group",
+    expect(result.issues).toEqual([])
+
+    expect(
+      result.repeatingGroupCandidates,
+    ).toContainEqual({
       baseName: "telefono",
       columns: ["telefono1", "telefono2"],
     })
   })
 
-  it("detects repeating columns with underscore numbering", () => {
+  it("reports underscore-numbered columns as a candidate", () => {
     const table: FlatTable = {
       name: "pedidos",
       columns: [
@@ -119,8 +125,15 @@ describe("analyzeFirstNormalForm", () => {
 
     const result = analyzeFirstNormalForm(table)
 
-    expect(result.issues).toContainEqual({
-      kind: "repeating-group",
+    expect(result.status).toBe(
+      "no-violations-detected",
+    )
+
+    expect(result.issues).toEqual([])
+
+    expect(
+      result.repeatingGroupCandidates,
+    ).toContainEqual({
       baseName: "producto",
       columns: [
         "producto_1",
@@ -155,7 +168,63 @@ describe("analyzeFirstNormalForm", () => {
     )
 
     expect(result.issues).toEqual([])
+    expect(
+      result.repeatingGroupCandidates,
+    ).toEqual([])
   })
+
+  it.each([
+    [
+      "payment_address",
+      [
+        "payment_address_1",
+        "payment_address_2",
+      ],
+    ],
+    [
+      "shipping_address",
+      [
+        "shipping_address_1",
+        "shipping_address_2",
+      ],
+    ],
+  ])(
+    "treats %s numbering as a candidate without assuming its business meaning",
+    (baseName, numberedColumns) => {
+      const table: FlatTable = {
+        name: "orders",
+        columns: [
+          {
+            name: "order_id",
+            sqlType: "integer",
+            nullable: false,
+          },
+          ...numberedColumns.map(
+            (name) => ({
+              name,
+              sqlType: "varchar",
+              nullable: true,
+            }),
+          ),
+        ],
+        rows: [],
+      }
+
+      const result =
+        analyzeFirstNormalForm(table)
+
+      expect(result.status).toBe(
+        "no-violations-detected",
+      )
+      expect(result.issues).toEqual([])
+      expect(
+        result.repeatingGroupCandidates,
+      ).toContainEqual({
+        baseName,
+        columns: numberedColumns,
+      })
+    },
+  )
 
   it("detects a JSON array stored inside one cell", () => {
     const table: FlatTable = {

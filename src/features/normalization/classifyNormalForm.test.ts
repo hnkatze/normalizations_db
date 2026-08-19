@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import type { ColumnDefinition, FlatTable, FunctionalDependency, Row } from "@/domain"
 
+import { analyzeFirstNormalForm, confirmRepeatingGroupCandidate } from "./analyzeFirstNormalForm"
 import { classifyNormalForm, type NormalFormVerdict } from "./classifyNormalForm"
 
 function column(name: string): ColumnDefinition {
@@ -118,14 +119,57 @@ describe("classifyNormalForm", () => {
     expect(verdict.violations).toEqual([])
   })
 
-  it("no declara 3FN cuando la tabla todavía viola 1FN por un grupo repetitivo", () => {
+  it("no trata los nombres numerados como una violación de 1FN sin confirmación humana", () => {
+    const verdict = expectDiagnosed(
+      classifyNormalForm({
+        table: tableOf("id", "telefono1", "telefono2"),
+        confirmedDependencies: [],
+        primaryKey: ["id"],
+      }),
+    )
+
+    expect(verdict.normalForm).toBe("3NF")
+  })
+
+  it("respeta un candidato a grupo repetitivo confirmado por el usuario", () => {
+    const table = tableOf("id", "telefono1", "telefono2")
+    const [candidate] = analyzeFirstNormalForm(table).repeatingGroupCandidates
+
+    expect(candidate).toBeDefined()
+    if (candidate === undefined) return
+
     const verdict = classifyNormalForm({
-      table: tableOf("id", "telefono1", "telefono2"),
+      table,
       confirmedDependencies: [],
+      confirmedFirstNormalFormIssues: [confirmRepeatingGroupCandidate(candidate)],
       primaryKey: ["id"],
     })
 
     expect(verdict).toEqual({
+      status: "unnormalized",
+      reason: "first-normal-form-violations",
+    })
+  })
+
+  it("sigue declarando unnormalized para un arreglo JSON no atómico", () => {
+    const table: FlatTable = {
+      ...tableOf("id", "telefonos"),
+      rows: [
+        {
+          id: 1,
+          telefonos:
+            '["1111-1111","2222-2222"]',
+        },
+      ],
+    }
+
+    expect(
+      classifyNormalForm({
+        table,
+        confirmedDependencies: [],
+        primaryKey: ["id"],
+      }),
+    ).toEqual({
       status: "unnormalized",
       reason: "first-normal-form-violations",
     })

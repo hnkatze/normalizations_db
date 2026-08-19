@@ -21,6 +21,11 @@ export type FirstNormalFormIssue =
         | "sql-collection"
     }
 
+export type FirstNormalFormRepeatingGroupCandidate = {
+  readonly baseName: string
+  readonly columns: readonly ColumnName[]
+}
+
 export type FirstNormalFormAnalysis = {
   /**
    * Evitamos afirmar que una tabla cumple 1FN únicamente
@@ -34,6 +39,9 @@ export type FirstNormalFormAnalysis = {
     | "no-violations-detected"
 
   readonly issues: readonly FirstNormalFormIssue[]
+
+  readonly repeatingGroupCandidates:
+    readonly FirstNormalFormRepeatingGroupCandidate[]
 }
 
 /**
@@ -46,10 +54,10 @@ export type FirstNormalFormAnalysis = {
 export function analyzeFirstNormalForm(
   table: FlatTable,
 ): FirstNormalFormAnalysis {
-  const issues: FirstNormalFormIssue[] = [
-    ...detectRepeatingGroups(table),
-    ...detectNonAtomicValues(table),
-  ]
+  const issues = detectNonAtomicValues(table)
+
+  const repeatingGroupCandidates =
+    detectRepeatingGroups(table)
 
   return {
     status:
@@ -57,12 +65,13 @@ export function analyzeFirstNormalForm(
         ? "violations-detected"
         : "no-violations-detected",
     issues,
+    repeatingGroupCandidates,
   }
 }
 
 function detectRepeatingGroups(
   table: FlatTable,
-): readonly FirstNormalFormIssue[] {
+): readonly FirstNormalFormRepeatingGroupCandidate[] {
   const groups = new Map<
     string,
     ColumnName[]
@@ -83,21 +92,43 @@ function detectRepeatingGroups(
     groups.set(baseName, current)
   }
 
-  const issues: FirstNormalFormIssue[] = []
+  const candidates:
+    FirstNormalFormRepeatingGroupCandidate[] = []
 
   for (const [baseName, columns] of groups) {
     if (columns.length < 2) {
       continue
     }
 
-    issues.push({
-      kind: "repeating-group",
+    candidates.push({
       baseName,
       columns,
     })
   }
 
-  return issues
+  return candidates
+}
+
+export function repeatingGroupCandidateKey(
+  candidate: FirstNormalFormRepeatingGroupCandidate,
+): string {
+  return JSON.stringify([
+    candidate.baseName,
+    ...candidate.columns,
+  ])
+}
+
+export function confirmRepeatingGroupCandidate(
+  candidate: FirstNormalFormRepeatingGroupCandidate,
+): Extract<
+  FirstNormalFormIssue,
+  { readonly kind: "repeating-group" }
+> {
+  return {
+    kind: "repeating-group",
+    baseName: candidate.baseName,
+    columns: candidate.columns,
+  }
 }
 
 /**

@@ -4,6 +4,7 @@ import type { FlatTable } from "@/domain"
 
 import {
   analyzeFirstNormalForm,
+  confirmRepeatingGroupCandidate,
 } from "@/features/sql-upload/analyzeFirstNormalForm"
 
 import {
@@ -75,31 +76,33 @@ describe("First Normal Form integration", () => {
     expect(
       initialAnalysis.status,
     ).toBe(
-      "violations-detected",
+      "no-violations-detected",
     )
 
     /*
-     * 2. Localizamos el grupo repetitivo
-     * detectado automáticamente.
+     * 2. Localizamos el posible grupo repetitivo
+     * y confirmamos su significado.
      */
-    const repeatingIssue =
-      initialAnalysis.issues.find(
-        (issue) =>
-          issue.kind ===
-          "repeating-group",
-      )
+    const repeatingCandidate =
+      initialAnalysis
+        .repeatingGroupCandidates[0]
 
     expect(
-      repeatingIssue,
+      repeatingCandidate,
     ).toBeDefined()
 
     if (
-      repeatingIssue === undefined
+      repeatingCandidate === undefined
     ) {
       throw new Error(
-        "Se esperaba detectar un grupo repetitivo.",
+        "Se esperaba detectar un posible grupo repetitivo.",
       )
     }
+
+    const repeatingIssue =
+      confirmRepeatingGroupCandidate(
+        repeatingCandidate,
+      )
 
     /*
      * 3. Aplicamos la transformación usando
