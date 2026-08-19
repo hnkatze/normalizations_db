@@ -3,8 +3,8 @@ Construcción de la representación intermedia.
 
 El IR es el contrato entre este servicio y el dominio TypeScript. Cada entrada
 de `tables` incluye `name`, `columns` y `rows` con exactamente la forma de
-`FlatTable` en `src/domain/relationalModel.ts`, más `primaryKey` y
-`foreignKeys`, que el dominio puede ignorar sin romperse.
+`FlatTable` en `src/domain/relationalModel.ts`, más `primaryKey`,
+`foreignKeys` y `uniqueKeys`, que el dominio puede ignorar sin romperse.
 """
 
 import hashlib
@@ -52,6 +52,8 @@ def build_ir(raw: bytes) -> dict[str, Any]:
                 table = _read_create_table(parsed)
                 if table is not None:
                     tables[table["name"]] = table
+            elif isinstance(parsed, exp.Create) and isinstance(parsed.this, exp.Index):
+                _apply_unique_index(parsed, tables)
             elif isinstance(parsed, exp.Insert):
                 name, values = _read_insert(parsed, tables)
                 if name is not None:
@@ -60,6 +62,7 @@ def build_ir(raw: bytes) -> dict[str, Any]:
                 _apply_alter(parsed, tables)
 
     _resolve_reference_columns(tables)
+    _drop_redundant_unique_keys(tables)
 
     for name, table in tables.items():
         table["rows"] = rows.get(name, [])
@@ -85,6 +88,7 @@ def _read_create_table(node: exp.Create) -> dict[str, Any] | None:
     columns: list[dict[str, Any]] = []
     primary_key: list[str] = []
     foreign_keys: list[dict[str, Any]] = []
+    unique_keys: list[list[str]] = []
 
     for definition in schema.expressions:
         if isinstance(definition, exp.ColumnDef):
@@ -97,6 +101,10 @@ def _read_create_table(node: exp.Create) -> dict[str, Any] | None:
             )
             if any(isinstance(c.kind, exp.PrimaryKeyColumnConstraint) for c in definition.constraints):
                 primary_key.append(definition.name)
+            # El `UNIQUE` en línea nombra a su propia columna: lo que sqlglot
+            # cuelga del nodo es el nombre de la restricción, no una lista.
+            if any(isinstance(c.kind, exp.UniqueColumnConstraint) for c in definition.constraints):
+                _append_unique_key(unique_keys, [definition.name])
             for constraint in definition.constraints:
                 if isinstance(constraint.kind, exp.Reference):
                     foreign_keys.append(_read_column_reference(definition.name, constraint.kind))
@@ -104,18 +112,26 @@ def _read_create_table(node: exp.Create) -> dict[str, Any] | None:
             primary_key = [e.name for e in definition.expressions]
         elif isinstance(definition, exp.ForeignKey):
             foreign_keys.append(_read_foreign_key(definition))
+        elif isinstance(definition, exp.UniqueColumnConstraint):
+            _append_unique_key(unique_keys, _read_unique_constraint(definition))
         elif isinstance(definition, exp.Constraint):
             for inner in definition.expressions:
                 if isinstance(inner, exp.PrimaryKey):
                     primary_key = [e.name for e in inner.expressions]
                 elif isinstance(inner, exp.ForeignKey):
                     foreign_keys.append(_read_foreign_key(inner))
+                elif isinstance(inner, exp.UniqueColumnConstraint):
+                    _append_unique_key(unique_keys, _read_unique_constraint(inner))
 
     return {
         "name": schema.this.name,
         "columns": columns,
         "primaryKey": primary_key,
         "foreignKeys": [fk for fk in foreign_keys if fk["referencesTable"]],
+        # El nombre replica al de `ParsedTable` en `src/domain/parsedSchema.ts`,
+        # igual que `primaryKey` y `foreignKeys`: cada entrada es una clave
+        # candidata, posiblemente compuesta, afirmada por el DDL sin ver ni una fila.
+        "uniqueKeys": unique_keys,
         "rows": [],
     }
 
@@ -131,6 +147,44 @@ def _is_nullable(definition: exp.ColumnDef) -> bool:
         if isinstance(constraint.kind, exp.NotNullColumnConstraint):
             return bool(constraint.kind.args.get("allow_null"))
     return True
+
+
+def _read_unique_constraint(node: exp.UniqueColumnConstraint) -> list[str]:
+    """Lee las columnas de un `UNIQUE` declarado a nivel de tabla.
+
+    Es la única lectura del `UNIQUE`, compartida por el `CREATE TABLE` y el
+    `ALTER TABLE`; T-SQL intercala `NONCLUSTERED` y sqlglot cambia el nodo por eso.
+    """
+    target = node.this
+    if isinstance(target, exp.Schema):
+        return _key_column_names(target.expressions)
+    if isinstance(target, exp.NonClusteredColumnConstraint):
+        return _key_column_names(target.this)
+    return []
+
+
+def _key_column_names(nodes: Any) -> list[str]:
+    """Reduce a nombres las columnas que forman una clave.
+
+    La misma lista llega como identificador pelado, como columna o envuelta en
+    `ASC`/`DESC` según de dónde venga, y las tres nombran lo mismo.
+    """
+    names: list[str] = []
+    for node in nodes or []:
+        while isinstance(node, (exp.Ordered, exp.Column)):
+            node = node.this
+        names.append(node.name if isinstance(node, exp.Expression) else "")
+    return names
+
+
+def _append_unique_key(unique_keys: list[list[str]], columns: list[str]) -> None:
+    """Suma una clave única declarada, salvo que no nombre columnas reales.
+
+    Un índice sobre una expresión calculada llega sin nombre utilizable, y una
+    clave con un hueco no se puede alinear con ninguna columna de la tabla.
+    """
+    if columns and all(columns):
+        unique_keys.append(columns)
 
 
 def _read_reference(reference: exp.Expression | None) -> tuple[str, list[str]]:
@@ -194,6 +248,30 @@ def _apply_alter(node: exp.Alter, tables: dict[str, dict[str, Any]]) -> None:
                     table["foreignKeys"].append(foreign_key)
             elif isinstance(candidate, exp.PrimaryKey) and not table["primaryKey"]:
                 table["primaryKey"] = [e.name for e in candidate.expressions]
+            elif isinstance(candidate, exp.UniqueColumnConstraint):
+                _append_unique_key(table["uniqueKeys"], _read_unique_constraint(candidate))
+
+
+def _apply_unique_index(node: exp.Create, tables: dict[str, dict[str, Any]]) -> None:
+    """Incorpora la clave que declara un `CREATE UNIQUE INDEX` posterior.
+
+    Un índice filtrado solo es único dentro de su `WHERE`: fuera de ese
+    subconjunto la columna se repite, así que no afirma ninguna clave candidata.
+    """
+    index = node.this
+    if not node.args.get("unique") or not isinstance(index, exp.Index):
+        return
+
+    target = index.args.get("table")
+    table = tables.get(target.name) if isinstance(target, exp.Table) else None
+    if table is None:
+        return
+
+    params = index.args.get("params")
+    if not isinstance(params, exp.IndexParameters) or params.args.get("where") is not None:
+        return
+
+    _append_unique_key(table["uniqueKeys"], _key_column_names(params.args.get("columns")))
 
 
 def _flatten_constraints(action: exp.Expression) -> list[exp.Expression]:
@@ -225,6 +303,28 @@ def _resolve_reference_columns(tables: dict[str, dict[str, Any]]) -> None:
             if len(foreign_key["referencesColumns"]) == len(foreign_key["columns"]):
                 resolved.append(foreign_key)
         table["foreignKeys"] = resolved
+
+
+def _drop_redundant_unique_keys(tables: dict[str, dict[str, Any]]) -> None:
+    """Descarta las claves únicas que no agregan nada sobre lo ya declarado.
+
+    Compara por conjunto porque el orden de las columnas no cambia qué filas
+    distingue una clave, y corre al final porque la primaria puede llegar en un
+    `ALTER TABLE` posterior al `UNIQUE` que la repite.
+    """
+    for table in tables.values():
+        seen: set[frozenset[str]] = set()
+        if table["primaryKey"]:
+            seen.add(frozenset(table["primaryKey"]))
+
+        distinct: list[list[str]] = []
+        for key in table["uniqueKeys"]:
+            signature = frozenset(key)
+            if signature in seen:
+                continue
+            seen.add(signature)
+            distinct.append(key)
+        table["uniqueKeys"] = distinct
 
 
 def _read_insert(

@@ -213,3 +213,188 @@ def test_toda_clave_foranea_emitida_respeta_el_alineamiento_posicional() -> None
     for name, fk in emitted:
         assert len(fk["columns"]) == len(fk["referencesColumns"]), (name, fk)
         assert fk["referencesTable"] in tables, (name, fk)
+
+
+def test_unique_de_tabla() -> None:
+    tables = _tables(
+        """
+        CREATE TABLE turno (
+          id INT PRIMARY KEY,
+          conductor_id INT,
+          bloque_id INT,
+          UNIQUE (conductor_id, bloque_id)
+        );
+        """
+    )
+
+    assert tables["turno"]["uniqueKeys"] == [["conductor_id", "bloque_id"]]
+
+
+def test_unique_de_tabla_con_nombre_de_restriccion() -> None:
+    tables = _tables(
+        """
+        CREATE TABLE cuota (
+          id INT PRIMARY KEY,
+          plan_id INT,
+          numero INT,
+          CONSTRAINT uq_cuota UNIQUE (plan_id, numero)
+        );
+        """
+    )
+
+    assert tables["cuota"]["uniqueKeys"] == [["plan_id", "numero"]]
+
+
+def test_unique_en_linea_en_la_definicion_de_columna() -> None:
+    tables = _tables(
+        "CREATE TABLE alumno (id INT PRIMARY KEY, dni VARCHAR(20) UNIQUE, nombre VARCHAR(50));"
+    )
+
+    assert tables["alumno"]["uniqueKeys"] == [["dni"]]
+
+
+def test_unique_en_linea_con_nombre_de_restriccion() -> None:
+    # T-SQL escribe `constraint UQ_x unique` pegado a la columna; el nombre no
+    # es una lista de columnas y confundirlo produciría una clave inventada.
+    tables = _tables(
+        """
+        CREATE TABLE plantilla (
+          id INT PRIMARY KEY,
+          nombre VARCHAR(100) NOT NULL CONSTRAINT uq_plantilla_nombre UNIQUE
+        );
+        """
+    )
+
+    assert tables["plantilla"]["uniqueKeys"] == [["nombre"]]
+
+
+def test_create_unique_index_posterior_a_la_tabla() -> None:
+    tables = _tables(
+        """
+        CREATE TABLE evento (id INT PRIMARY KEY, evento_uid VARCHAR(36), origen VARCHAR(20));
+        CREATE UNIQUE INDEX ux_evento_uid ON evento (evento_uid, origen);
+        """
+    )
+
+    assert tables["evento"]["uniqueKeys"] == [["evento_uid", "origen"]]
+
+
+def test_create_index_no_unico_no_aporta_clave() -> None:
+    tables = _tables(
+        """
+        CREATE TABLE evento (id INT PRIMARY KEY, origen VARCHAR(20));
+        CREATE INDEX ix_evento_origen ON evento (origen);
+        """
+    )
+
+    assert tables["evento"]["uniqueKeys"] == []
+
+
+def test_create_unique_index_filtrado_no_es_clave_candidata() -> None:
+    # Un índice con `WHERE` solo es único sobre el subconjunto filtrado: fuera
+    # de él la columna puede repetirse, así que no determina nada.
+    tables = _tables(
+        """
+        CREATE TABLE cliente (id INT PRIMARY KEY, telefono VARCHAR(20), estado INT);
+        CREATE UNIQUE INDEX ux_cliente_telefono ON cliente (telefono) WHERE estado = 1;
+        """
+    )
+
+    assert tables["cliente"]["uniqueKeys"] == []
+
+
+def test_create_unique_index_sobre_una_tabla_inexistente_se_descarta() -> None:
+    tables = _tables("CREATE UNIQUE INDEX ux_fantasma ON fantasma (codigo);")
+
+    assert tables == {}
+
+
+def test_alter_table_add_constraint_unique() -> None:
+    tables = _tables(
+        """
+        CREATE TABLE pago (id INT PRIMARY KEY, referencia VARCHAR(40));
+        ALTER TABLE pago ADD CONSTRAINT uq_pago UNIQUE (referencia);
+        """
+    )
+
+    assert tables["pago"]["uniqueKeys"] == [["referencia"]]
+
+
+def test_unique_nonclustered_de_tsql() -> None:
+    # T-SQL intercala `NONCLUSTERED` entre `UNIQUE` y la lista de columnas, y
+    # sqlglot la envuelve en otro nodo en vez de dejar el `Schema` habitual.
+    tables = _tables(
+        """
+        SET ANSI_NULLS ON
+        GO
+        CREATE TABLE reparto (id INT PRIMARY KEY, ruta_id INT, orden INT,
+          CONSTRAINT uq_reparto UNIQUE NONCLUSTERED (ruta_id, orden))
+        GO
+        """
+    )
+
+    assert tables["reparto"]["uniqueKeys"] == [["ruta_id", "orden"]]
+
+
+def test_unique_que_repite_la_clave_primaria_no_se_duplica() -> None:
+    tables = _tables(
+        """
+        CREATE TABLE nota (
+          alumno_id INT,
+          curso_id INT,
+          valor INT,
+          PRIMARY KEY (alumno_id, curso_id),
+          UNIQUE (curso_id, alumno_id)
+        );
+        """
+    )
+
+    assert tables["nota"]["primaryKey"] == ["alumno_id", "curso_id"]
+    assert tables["nota"]["uniqueKeys"] == []
+
+
+def test_unique_que_repite_una_clave_primaria_declarada_por_alter() -> None:
+    # La clave primaria puede llegar después del `UNIQUE`; comparar en el
+    # momento de leerlo dejaría pasar el duplicado.
+    tables = _tables(
+        """
+        CREATE TABLE nota (alumno_id INT, curso_id INT, UNIQUE (alumno_id, curso_id));
+        ALTER TABLE nota ADD PRIMARY KEY (alumno_id, curso_id);
+        """
+    )
+
+    assert tables["nota"]["uniqueKeys"] == []
+
+
+def test_una_clave_unica_declarada_dos_veces_se_emite_una_sola_vez() -> None:
+    tables = _tables(
+        """
+        CREATE TABLE tienda (id INT PRIMARY KEY, codigo VARCHAR(20) UNIQUE);
+        CREATE UNIQUE INDEX ux_tienda_codigo ON tienda (codigo);
+        """
+    )
+
+    assert tables["tienda"]["uniqueKeys"] == [["codigo"]]
+
+
+def test_uniqueidentifier_no_es_una_restriccion_unique() -> None:
+    # `uniqueidentifier` es el tipo GUID de T-SQL. Contarlo como restricción
+    # inventaría una clave candidata sobre una columna que nadie declaró única.
+    tables = _tables(
+        """
+        SET ANSI_NULLS ON
+        GO
+        CREATE TABLE bandeja (id INT PRIMARY KEY, evento_id UNIQUEIDENTIFIER NOT NULL)
+        GO
+        """
+    )
+
+    assert tables["bandeja"]["uniqueKeys"] == []
+
+
+def test_una_tabla_sin_unique_declara_la_lista_vacia() -> None:
+    # El campo existe siempre: el dominio no debería distinguir "no hay claves"
+    # de "esta versión del lector todavía no las leía".
+    tables = _tables("CREATE TABLE simple (id INT PRIMARY KEY, nombre VARCHAR(20));")
+
+    assert tables["simple"]["uniqueKeys"] == []
