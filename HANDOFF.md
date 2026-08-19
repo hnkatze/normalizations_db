@@ -187,6 +187,72 @@ los dos.
 
 ---
 
+## Lo que se construyó en la tanda del 18 de agosto (segunda mitad)
+
+Cinco commits sobre `development`, después de traer los quince de la rama de trabajo
+(el `npm install` de ese pull es obligatorio: `@xyflow/react` y `@dagrejs/dagre` son
+dependencias nuevas y sin ellas `tsc` y un test fallan).
+
+**El archivo se diagnostica entero, no una tabla a la vez.**
+`summarizeSchemaNormalization` recorre todas las tablas, las cuenta por forma normal y
+ordena las que necesitan trabajo. Es el `map` sobre `classifyNormalForm` que faltaba, y
+no reimplementa nada: usa `analyzeParsedTable` y `describeNormalFormVerdict`.
+
+Cuenta **causas**, no violaciones crudas. Sobre `ventas_raw` son 10 en vez de 51, y las
+cinco primeras son exactamente las cinco entidades del answer key. Contar violaciones de
+a una hacía creer que había cinco veces más trabajo del que hay.
+
+Aparta las reglas cuyo determinante es una columna calculada, con el MISMO criterio que
+`suggestFunctionalDependencies` usa para no preseleccionarlas: si la pantalla no las
+ofrece, el informe no puede contarlas como trabajo pendiente sin contradecirla.
+
+**Medido antes de ponerlo en pantalla**: 552 tablas de solo esquema tardan 10 ms, una
+tabla de 40 columnas con 200 filas 59 ms, y 200 tablas CON datos 745 ms. Un `useMemo`
+alcanza; sacarlo a un worker sería resolver un problema que no existe.
+
+**Dos esquemas ya no se pisan.** Un volcado que declara `ventas.cliente` y `rrhh.cliente`
+registraba las dos bajo la misma clave: la segunda sobrescribía a la primera, la tabla
+desaparecía del IR y la clave foránea que la referenciaba quedaba apuntando a columnas de
+otra entidad. Ahora se registran calificadas y el nombre vuelve a acortarse al final para
+las que no compiten — que es el caso corriente de un volcado entero bajo `dbo`.
+
+> La gotcha anterior decía que `REFERENCES dbo.alumno(id)` no se resolvía. **Es falso**,
+> medido el 18 de agosto de 2026: 8 de 8 claves foráneas calificadas resuelven bien. Lo
+> que fallaba era la colisión entre esquemas distintos, que es un problema peor porque
+> corrompe en vez de perder.
+
+**El par de columnas en razón fija.** `iva = base * 0.15` era el hueco que más dolía.
+La relación es SIMÉTRICA —`base = iva * 6.66` se cumple igual— y nada en los datos dice
+cuál se calcula, así que se marcan LAS DOS. Alcanza para el propósito: ninguna se
+preselecciona, y un par en razón fija no nombra una entidad en ningún caso. Medido sobre
+los tres archivos del repo: cero sugerencias nuevas.
+
+> Dos fixtures viejos de `detectDerivedColumns` tenían razón fija por accidente (`b = a*2`
+> en uno, `precio` constante en el otro) y probaban otra cosa que la que su nombre decía.
+
+**El recorrido cubre lo nuevo.** Ya no está cableado a `ventas_raw`: toma el nombre de la
+tabla del archivo, aplica el answer key solo a la semilla que lo tiene y declara una regla
+a mano cuando no hay filas. `seed_ventas_solo_esquema.sql` es nueva y existe porque sin
+ella el camino de un volcado sin datos no tenía ninguna verificación en navegador.
+
+### Estado verificado en Chrome (18 de agosto de 2026)
+
+`npm run walkthrough:all` corre las tres semillas. Las tres llegan a 3FN con **0 px** de
+desborde horizontal y **cero errores de consola**:
+
+| Semilla | Informe del archivo | 3FN |
+|---|---|---|
+| `seed_ventas_raw` | 1 de 1 tabla, 10 causas, 1FN | 6 tablas (answer key completo) |
+| `seed_aerolinea_multitabla` | 1 de 7 tablas, 1 en 2FN y 6 en 3FN | 1 tabla |
+| `seed_ventas_solo_esquema` | sin diagnosticar (no hay filas ni reglas) | 2 tablas |
+
+> Al declarar una regla a mano hay que usar `check({ force: true })`, no `click()`: el
+> control real está debajo de su etiqueta y un click directo no cambia el estado. El
+> formulario queda aparentemente lleno diciendo "seleccione al menos una columna
+> determinante", y se pierden treinta segundos buscando un bug que no existe.
+
+---
+
 ## Lo que está pendiente y bloquea
 
 ### 1. Vercel sí sirve `api/*.py` en un proyecto Next.js (RESUELTO)
@@ -258,8 +324,14 @@ Ya se puede elegir **cuál** tabla se normaliza, y volver a elegir otra. Cada ta
 diagnostica sola con `classifyNormalForm`, que es puro y por-tabla: diagnosticar el
 archivo entero es un `map` sobre sus tablas.
 
-Lo que falta sigue siendo el nivel de esquema: el grafo de claves foráneas
-—`ParsedTable.foreignKeys` ya las trae, nadie las usa todavía— y un informe global.
+El nivel de esquema ya está: el grafo de claves foráneas alimenta el diagrama
+(`deriveForeignKeyGraph`, `parsedSchemaToErDiagram`) y el informe global vive en
+`summarizeSchemaNormalization`, arriba del índice de tablas.
+
+Lo que queda es el paso siguiente y es una decisión de producto, no un hueco: hoy se
+normaliza UNA tabla por vez aunque el informe diagnostique todas. Normalizar el archivo
+entero de una pasada implica resolver qué hacer cuando dos tablas extraen la misma
+entidad, y eso no está decidido.
 
 
 ### 6. Decisión abierta: ¿el stepper se elimina de toda la app? (previo)
@@ -404,11 +476,13 @@ directorios vendorizados. Filtrar con `rg`, o correr el build en su propio coman
 ## Cómo verificar
 
 ```bash
-npx tsc --noEmit     # limpio
-npx vitest run       # 295 pruebas
-npx eslint src       # limpio
-npx next build       # compila
-npm run walkthrough  # recorre la app en Chrome y deja capturas en .walkthrough/
+npm install              # obligatorio tras un pull que toque package.json
+npx tsc --noEmit         # limpio
+npx vitest run           # 470 pruebas
+npm run test:parser      # 30 pruebas de Python (pip install -r requirements-dev.txt)
+npx eslint src           # limpio
+npx next build           # compila
+npm run walkthrough:all  # recorre las TRES semillas en Chrome
 ```
 
 El recorrido necesita los otros dos procesos levantados. Sale distinto de cero si algo
@@ -416,7 +490,7 @@ falla, así que sirve como comprobación y no solo como paseo.
 
 **`npx eslint api` falla**: eslint no tiene configuración para `.py`. Lintear solo `src`.
 
-Estado al momento de escribir esto: las cinco pasan en verde.
+Estado al 18 de agosto de 2026: las siete pasan en verde.
 
 Un `PostToolUse` hook typechequea cada archivo `.ts`/`.tsx` al escribirlo. Su silencio
 significa "no se chequeó", no "está limpio".
