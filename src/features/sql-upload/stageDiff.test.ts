@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import type { NormalizedSchema, NormalizedTable } from "@/domain"
-import { diffStages } from "./stageDiff"
+import { diffStages, unchangedTableNames } from "./stageDiff"
 
 function table(
   name: string,
@@ -79,5 +79,55 @@ describe("diffStages", () => {
     const after = schema([table("t", ["z"], ["z"]), table("z", ["z", "y", "x"], ["z"])])
 
     expect(diffStages(before, after).movedColumns).toEqual(["y", "x"])
+  })
+})
+
+describe("unchangedTableNames", () => {
+  it("reports every table when the two stages are identical", () => {
+    const only = schema([
+      table("ventas", ["venta_id", "cliente_id"], ["venta_id"]),
+      table("producto_id", ["producto_id", "producto_nombre"], ["producto_id"]),
+    ])
+
+    expect(unchangedTableNames(only, only)).toEqual(new Set(["ventas", "producto_id"]))
+  })
+
+  it("excludes a table whose source columns shrank", () => {
+    // El caso real: `ventas` sigue existiendo en las dos etapas, pero perdió
+    // una columna que se movió a una tabla nueva. Su proyección de filas ya
+    // no es la misma, así que su pie de tabla no puede ser el mismo texto.
+    const before = schema([
+      table("ventas", ["venta_id", "cliente_id", "cliente_nombre"], ["venta_id"]),
+    ])
+    const after = schema([
+      table("ventas", ["venta_id", "cliente_id"], ["venta_id"]),
+      table("cliente_id", ["cliente_id", "cliente_nombre"], ["cliente_id"]),
+    ])
+
+    expect(unchangedTableNames(before, after)).toEqual(new Set())
+  })
+
+  it("excludes a table that did not exist in the previous stage", () => {
+    const before = schema([table("ventas", ["venta_id"], ["venta_id"])])
+    const after = schema([
+      table("ventas", ["venta_id"], ["venta_id"]),
+      table("cliente_id", ["cliente_id"], ["cliente_id"]),
+    ])
+
+    expect(unchangedTableNames(before, after)).toEqual(new Set(["ventas"]))
+  })
+
+  it("reports only the unchanged tables in a mix of changed and untouched ones", () => {
+    const before = schema([
+      table("ventas", ["venta_id", "cliente_id", "cliente_nombre"], ["venta_id"]),
+      table("producto_id", ["producto_id", "producto_nombre"], ["producto_id"]),
+    ])
+    const after = schema([
+      table("ventas", ["venta_id", "cliente_id"], ["venta_id"]),
+      table("cliente_id", ["cliente_id", "cliente_nombre"], ["cliente_id"]),
+      table("producto_id", ["producto_id", "producto_nombre"], ["producto_id"]),
+    ])
+
+    expect(unchangedTableNames(before, after)).toEqual(new Set(["producto_id"]))
   })
 })
