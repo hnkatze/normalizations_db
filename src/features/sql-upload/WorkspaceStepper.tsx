@@ -1,6 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import {
   isStepAvailable,
   stepLabel,
@@ -28,7 +29,10 @@ type WorkspaceStepperProps = {
 export function WorkspaceStepper({ current, availability, onSelect }: WorkspaceStepperProps) {
   return (
     <nav aria-label="Pasos de la normalización">
-      <ol className="flex flex-wrap items-center gap-1">
+      {/* La barra bajo los pasos es puramente decorativa: el paso activo ya
+          se anuncia con `aria-current` y se distingue por texto (número +
+          etiqueta), el color acá solo refuerza. */}
+      <ol className="flex flex-wrap items-center gap-1 border-b-2 border-accent/25 pb-1.5">
         {WORKSPACE_STEPS.map((step, index) => {
           const available = isStepAvailable(step, availability)
           const isCurrent = step === current
@@ -51,7 +55,12 @@ export function WorkspaceStepper({ current, availability, onSelect }: WorkspaceS
                 aria-current={isCurrent ? "step" : undefined}
                 aria-disabled={available ? undefined : true}
                 aria-describedby={unlockHint === null ? undefined : hintId}
-                className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+                className={cn(
+                  "aria-disabled:pointer-events-none aria-disabled:opacity-50",
+                  // El paso vivo es el único lugar que gasta `--accent`: es
+                  // justo el color que el token reserva para señalarlo.
+                  isCurrent && "border-accent bg-accent/20 text-accent-foreground hover:bg-accent/25",
+                )}
                 onClick={() => {
                   if (available) {
                     onSelect(step)
