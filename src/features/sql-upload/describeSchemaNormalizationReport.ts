@@ -24,9 +24,11 @@ import type { SchemaNormalizationReport, SchemaTableDiagnosis } from "./summariz
  */
 export const START_HERE_LIMIT = 5
 
+export type SchemaReportBucket = "unnormalized" | NormalForm | "undiagnosable"
+
 /** Un balde del recuento, ya rotulado y sin los que quedaron en cero. */
 export type SchemaNormalFormCount = {
-  readonly key: NormalForm | "undiagnosable"
+  readonly key: SchemaReportBucket
   readonly label: string
   readonly count: number
 }
@@ -42,14 +44,16 @@ export type SchemaNormalizationReportSummary = {
 }
 
 /** De peor a mejor: lo que necesita trabajo se lee primero. */
-const COUNT_ORDER: readonly (NormalForm | "undiagnosable")[] = [
+const COUNT_ORDER: readonly SchemaReportBucket[] = [
+  "unnormalized",
   "1NF",
   "2NF",
   "3NF",
   "undiagnosable",
 ]
 
-const COUNT_LABELS: Readonly<Record<NormalForm | "undiagnosable", string>> = {
+const COUNT_LABELS: Readonly<Record<SchemaReportBucket, string>> = {
+  unnormalized: "por debajo de 1FN",
   "1NF": "en 1FN",
   "2NF": "en 2FN",
   "3NF": "en 3FN",
@@ -89,10 +93,10 @@ function headlineFor(report: SchemaNormalizationReport, tableCount: number): str
 
   if (report.needsWork.length > 0) {
     // El verbo concuerda con las tablas AFECTADAS, que es el sujeto, no con el
-    // total: "1 de 7 tablas tienen" está mal dicho.
+    // total: "1 de 7 tablas requieren" está mal dicho.
     const noun = tableCount === 1 ? "tabla" : "tablas"
-    const verb = report.needsWork.length === 1 ? "tiene" : "tienen"
-    return `${report.needsWork.length} de ${tableCount} ${noun} ${verb} redundancia por resolver`
+    const verb = report.needsWork.length === 1 ? "requiere" : "requieren"
+    return `${report.needsWork.length} de ${tableCount} ${noun} ${verb} normalización`
   }
 
   // Sin tablas por atender hay dos archivos muy distintos: el que está limpio y
@@ -101,6 +105,17 @@ function headlineFor(report: SchemaNormalizationReport, tableCount: number): str
     return `No se pudo diagnosticar ${
       tableCount === 1 ? "la única tabla del archivo" : `ninguna de las ${tableCount} tablas del archivo`
     }`
+  }
+
+  if (report.totals.undiagnosable > 0) {
+    const diagnosed = tableCount - report.totals.undiagnosable
+    const missingClause =
+      report.totals.undiagnosable === 1
+        ? "1 tabla no se pudo diagnosticar"
+        : `${report.totals.undiagnosable} tablas no se pudieron diagnosticar`
+    const diagnosedClause =
+      diagnosed === 1 ? "la otra está en 3FN" : `las otras ${diagnosed} están en 3FN`
+    return `${missingClause}; ${diagnosedClause}`
   }
 
   return tableCount === 1

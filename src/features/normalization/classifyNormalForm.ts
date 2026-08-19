@@ -16,6 +16,7 @@
 import type { ColumnName, FunctionalDependency, NormalForm, NormalizationInput } from "@/domain"
 import { columnNamesOf, hasSolidEvidence } from "@/domain"
 
+import { analyzeFirstNormalForm } from "./analyzeFirstNormalForm"
 import { createCanonicalizer } from "./normalizeTo3NF"
 
 /**
@@ -48,6 +49,10 @@ export type NormalFormBasis =
  */
 export type NormalFormVerdict =
   | {
+      readonly status: "unnormalized"
+      readonly reason: "first-normal-form-violations"
+    }
+  | {
       readonly status: "diagnosed"
       /** La forma normal más alta que la tabla satisface hoy. */
       readonly normalForm: NormalForm
@@ -74,12 +79,16 @@ export type NormalFormClassificationInput = NormalizationInput & {
 /**
  * Clasifica una tabla contra las dependencias confirmadas para ella.
  *
- * 1FN es el piso: este proyecto lee tablas de un `CREATE TABLE`, que ya es
- * relacional por construcción, así que no hay grupos repetidos que detectar y
- * ninguna tabla puede estar "por debajo" de 1FN.
+ * Primero comprueba las violaciones detectables de 1FN. Solo cuando la tabla
+ * las supera tiene sentido diagnosticar 2FN y 3FN mediante sus dependencias.
  */
 export function classifyNormalForm(input: NormalFormClassificationInput): NormalFormVerdict {
   const { table, confirmedDependencies, primaryKey, confirmedSchemaDependencies = [] } = input
+
+  const firstNormalFormAnalysis = analyzeFirstNormalForm(table)
+  if (firstNormalFormAnalysis.status === "violations-detected") {
+    return { status: "unnormalized", reason: "first-normal-form-violations" }
+  }
 
   const hasRows = table.rows.length > 0
 

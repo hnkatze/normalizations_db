@@ -73,6 +73,14 @@ type VerdictIconProps = {
 /** El icono depende de si hay algo que resolver, no solo de si hubo diagnóstico. */
 function VerdictIcon({ summary }: VerdictIconProps) {
   switch (summary.status) {
+    case "unnormalized":
+      return (
+        <TriangleAlertIcon
+          aria-hidden="true"
+          focusable="false"
+          className="mt-0.5 size-4 shrink-0 text-foreground"
+        />
+      )
     case "undiagnosable":
       return (
         <InfoIcon
