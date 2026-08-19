@@ -40,6 +40,8 @@ import { confirmedDependenciesOf } from "./reviewedDependencies"
 import { isSchemaReviewReady } from "./schemaReadiness"
 import { suggestFunctionalDependencies } from "./suggestFunctionalDependencies"
 import { suggestPrimaryKey } from "./suggestPrimaryKey"
+import { UserDeclaredDependencySection } from "./UserDeclaredDependencySection"
+import { userDeclaredDependencyAsFunctionalDependency } from "./userDeclaredDependencyAsFunctionalDependency"
 
 import {
   UploadHero,
@@ -48,6 +50,7 @@ import {
 
 import { useParseSql } from "./useParseSql"
 import { useSchemaReview } from "./useSchemaReview"
+import { useUserDeclaredDependencies } from "./useUserDeclaredDependencies"
 import { WorkspaceStepper } from "./WorkspaceStepper"
 
 import {
@@ -124,6 +127,7 @@ export function SqlUploadContainer() {
 
   const parse = useParseSql()
   const schemaReview = useSchemaReview()
+  const userDeclared = useUserDeclaredDependencies()
 
   const stepHeadingRef =
     useRef<HTMLHeadingElement>(null)
@@ -298,7 +302,8 @@ export function SqlUploadContainer() {
 
   const totalConfirmedDependencyCount =
     confirmedDependencies.length +
-    confirmedDeclaredDependencies.length
+    confirmedDeclaredDependencies.length +
+    userDeclared.entries.length
 
   /*
    * Para abandonar 1FN se requiere:
@@ -349,16 +354,22 @@ export function SqlUploadContainer() {
                 analysis.detection.dependencies,
 
               // Sin filas, la única base posible del veredicto son las
-              // declaradas por el esquema que el usuario ya confirmó.
-              confirmedSchemaDependencies:
-                confirmedDeclaredDependencies.map(
+              // declaradas por el esquema y las declaradas a mano por el
+              // usuario, ambas ya afirmadas sin depender de ninguna fila.
+              confirmedSchemaDependencies: [
+                ...confirmedDeclaredDependencies.map(
                   declaredDependencyAsFunctionalDependency,
                 ),
+                ...userDeclared.entries.map((entry) =>
+                  userDeclaredDependencyAsFunctionalDependency(entry.dependency),
+                ),
+              ],
             }),
       [
         analysis,
         schemaReview.primaryKey,
         confirmedDeclaredDependencies,
+        userDeclared.entries,
       ],
     )
 
@@ -392,6 +403,9 @@ export function SqlUploadContainer() {
                 mergeConfirmedDependencies(
                   confirmedDependencies,
                   confirmedDeclaredDependencies,
+                  userDeclared.entries.map(
+                    (entry) => entry.dependency,
+                  ),
                 ),
             }),
       [
@@ -399,6 +413,7 @@ export function SqlUploadContainer() {
         schemaReview.primaryKey,
         confirmedDependencies,
         confirmedDeclaredDependencies,
+        userDeclared.entries,
       ],
     )
 
@@ -475,6 +490,7 @@ export function SqlUploadContainer() {
     )
 
     schemaReview.startReview([], [])
+    userDeclared.reset()
   }
 
   function handleFileChange(
@@ -568,6 +584,8 @@ export function SqlUploadContainer() {
         freshAnalysis.declaredDependencies,
       ),
     )
+
+    userDeclared.reset()
 
     setAnalysisId(
       (id) => id + 1,
@@ -807,6 +825,8 @@ export function SqlUploadContainer() {
           .dependencies,
         [],
       )
+
+      userDeclared.reset()
 
       /*
        * startReview reinicia la PK.
@@ -1163,6 +1183,34 @@ export function SqlUploadContainer() {
                   schemaReview.toggleConfirmedDeclaredDependency
                 }
               />
+
+              <div className="mt-4">
+                <UserDeclaredDependencySection
+                  columns={
+                    analysis.table.columns
+                  }
+                  entries={
+                    userDeclared.entries
+                  }
+                  onDeclare={(
+                    determinant,
+                    dependent,
+                  ) =>
+                    userDeclared.declare(
+                      determinant,
+                      dependent,
+                      analysis.table.columns.map(
+                        (column) =>
+                          column.name,
+                      ),
+                      analysis.table.rows,
+                    )
+                  }
+                  onRemove={
+                    userDeclared.remove
+                  }
+                />
+              </div>
             </div>
           </div>
         ) : null}
@@ -1212,7 +1260,8 @@ export function SqlUploadContainer() {
                   totalConfirmedDependencyCount,
                   analysis.detection.dependencies
                     .length +
-                    offerableDeclared.length,
+                    offerableDeclared.length +
+                    userDeclared.entries.length,
                 )}
               />
             ) : null}

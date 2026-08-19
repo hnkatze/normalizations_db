@@ -42,19 +42,29 @@ function cellValueOf(row: Row, column: ColumnName): CellValue {
   return value ?? null
 }
 
+/** Los valores del determinante para una fila dada, en el orden de `determinant`. */
+function determinantValuesOf(row: Row, determinant: readonly ColumnName[]): readonly CellValue[] {
+  return determinant.map((column) => cellValueOf(row, column))
+}
+
 /**
- * Construye la clave de agrupamiento para una tupla determinante. Los NULL se
- * serializan al literal `"null"`, de modo que toda fila con valor NULL para
- * un determinante dado cae en el mismo grupo (ver la nota de manejo de NULL
- * más arriba).
+ * Serializa una tupla determinante a una clave de agrupamiento. Los NULL
+ * quedan dentro del mismo `JSON.stringify`, de modo que toda fila con valor
+ * NULL para un determinante dado cae en el mismo grupo (ver la nota de
+ * manejo de NULL más arriba).
  */
-function determinantKey(row: Row, determinant: readonly ColumnName[]): string {
-  const values = determinant.map((column) => cellValueOf(row, column))
+function serializeDeterminantValues(values: readonly CellValue[]): string {
   return JSON.stringify(values)
 }
 
+/** Un valor concreto del determinante que aparece con dos valores distintos del dependiente. */
+export type DependencyCounterexample = {
+  readonly determinantValues: readonly CellValue[]
+  readonly dependentValues: readonly [CellValue, CellValue]
+}
+
 type DependencyEvaluation =
-  | { readonly holds: false }
+  | { readonly holds: false; readonly counterexample: DependencyCounterexample }
   | {
       readonly holds: true
       readonly groupCount: number
@@ -62,45 +72,61 @@ type DependencyEvaluation =
       readonly maxGroupSize: number
     }
 
-/** Agrupa las filas por la tupla determinante y verifica que el dependiente sea constante en cada grupo. */
-function evaluateDependency(
+type DeterminantGroup = {
+  readonly determinantValues: readonly CellValue[]
+  readonly dependentValue: CellValue
+  size: number
+}
+
+/**
+ * Agrupa las filas por la tupla determinante y verifica que el dependiente
+ * sea constante en cada grupo.
+ *
+ * Exportada porque el contraste de una regla declarada a mano por el usuario
+ * (`contrastFunctionalDependency`) necesita el mismo agrupamiento: reimplementarlo
+ * arriesgaría una segunda definición de "qué cuenta como contraejemplo".
+ */
+export function evaluateDependency(
   rows: readonly Row[],
   determinant: readonly ColumnName[],
   dependent: ColumnName,
 ): DependencyEvaluation {
-  const firstValueByGroup = new Map<string, CellValue>()
-  const sizeByGroup = new Map<string, number>()
+  const groups = new Map<string, DeterminantGroup>()
 
   for (const row of rows) {
-    const key = determinantKey(row, determinant)
+    const determinantValues = determinantValuesOf(row, determinant)
+    const key = serializeDeterminantValues(determinantValues)
     const dependentValue = cellValueOf(row, dependent)
-    const firstValue = firstValueByGroup.get(key)
+    const group = groups.get(key)
 
-    if (firstValue === undefined) {
-      // Map#get sobre un Map<string, CellValue> solo retorna undefined cuando
-      // la clave está ausente, ya que CellValue en sí nunca incluye undefined.
-      firstValueByGroup.set(key, dependentValue)
-      sizeByGroup.set(key, 1)
+    if (group === undefined) {
+      groups.set(key, { determinantValues, dependentValue, size: 1 })
       continue
     }
 
-    if (firstValue !== dependentValue) {
-      return { holds: false }
+    if (group.dependentValue !== dependentValue) {
+      return {
+        holds: false,
+        counterexample: {
+          determinantValues: group.determinantValues,
+          dependentValues: [group.dependentValue, dependentValue],
+        },
+      }
     }
 
-    sizeByGroup.set(key, (sizeByGroup.get(key) ?? 0) + 1)
+    group.size += 1
   }
 
   let maxGroupSize = 0
-  for (const size of sizeByGroup.values()) {
-    if (size > maxGroupSize) {
-      maxGroupSize = size
+  for (const group of groups.values()) {
+    if (group.size > maxGroupSize) {
+      maxGroupSize = group.size
     }
   }
 
   return {
     holds: true,
-    groupCount: firstValueByGroup.size,
+    groupCount: groups.size,
     rowCount: rows.length,
     maxGroupSize,
   }

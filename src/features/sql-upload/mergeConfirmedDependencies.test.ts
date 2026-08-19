@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import type { FunctionalDependency } from "@/domain"
+import type { UserDeclaredDependency } from "@/features/fd-detection"
 
 import { mergeConfirmedDependencies } from "./mergeConfirmedDependencies"
 import type { OfferableDeclaredDependency } from "./offerableDeclaredDependencies"
@@ -35,5 +36,18 @@ describe("mergeConfirmedDependencies", () => {
 
   it("con ninguna confirmada de ningún lado, no produce nada", () => {
     expect(mergeConfirmedDependencies([], [])).toEqual([])
+  })
+
+  it("suma también las declaradas a mano por el usuario, después de las dos anteriores", () => {
+    const userDeclared: readonly UserDeclaredDependency[] = [
+      { determinant: ["sku"], dependent: "descripcion_interna" },
+    ]
+
+    const result = mergeConfirmedDependencies([], [], userDeclared)
+
+    expect(result).toHaveLength(1)
+    expect(result[0]?.determinant).toEqual(["sku"])
+    expect(result[0]?.dependent).toBe("descripcion_interna")
+    expect(result[0]?.evidence.rowCount).toBe(0)
   })
 })
