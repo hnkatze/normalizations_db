@@ -57,3 +57,6 @@ venv/
 CLAUDE.md
 AGENTS.md
 .walkthrough/
+
+# Artefactos del navegador de inspeccion
+.playwright-mcp/
