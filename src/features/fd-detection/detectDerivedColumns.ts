@@ -10,20 +10,43 @@
  * Extraer una tabla para `subtotal` no saca redundancia: la redundancia de un
  * valor calculado se quita borrando la columna, no mudándola de tabla.
  *
- * El alcance es deliberadamente corto —producto y suma de DOS columnas— porque
- * son las que aparecen en un volcado real (subtotal, total, importe). Buscar
- * fórmulas arbitrarias sería un motor de álgebra, y lo que hace falta es
- * reconocer el caso que ensucia la descomposición.
+ * El alcance es deliberadamente corto —producto y suma de DOS columnas, más un
+ * factor constante sobre UNA— porque son las que aparecen en un volcado real
+ * (subtotal, total, importe, iva). Buscar fórmulas arbitrarias sería un motor
+ * de álgebra, y lo que hace falta es reconocer el caso que ensucia la
+ * descomposición. Cada forma que se agrega tiene precio: cuantas más se
+ * prueban, más columnas se marcan por casualidad.
  */
 
 import type { CellValue, ColumnName, FlatTable, Row } from "@/domain"
 
-export type DerivedColumn = {
-  readonly column: ColumnName
-  readonly operator: "product" | "sum"
-  /** Las dos columnas que producen el valor, en orden de declaración. */
-  readonly operands: readonly [ColumnName, ColumnName]
-}
+/**
+ * Discriminada por `operator` porque un factor constante no tiene segundo
+ * operando y sí tiene un número: dejar ambos campos opcionales haría
+ * representable "producto con factor", que no significa nada.
+ */
+export type DerivedColumn =
+  | {
+      readonly column: ColumnName
+      readonly operator: "product" | "sum"
+      /** Las dos columnas que producen el valor, en orden de declaración. */
+      readonly operands: readonly [ColumnName, ColumnName]
+    }
+  | {
+      readonly column: ColumnName
+      /**
+       * `column = operands[0] * factor`: el impuesto o la comisión de una
+       * factura. La relación es SIMÉTRICA —`iva = base * 0.15` y
+       * `base = iva * 6.66` se cumplen igual— y nada en los datos dice cuál de
+       * las dos se calcula. Por eso se emiten las DOS columnas: el efecto
+       * buscado es que ninguna se preseleccione como determinante, y para eso
+       * no hace falta saber cuál es la calculada. Un par de columnas en razón
+       * fija no nombra una entidad en ningún caso.
+       */
+      readonly operator: "fixed-ratio"
+      readonly operands: readonly [ColumnName]
+      readonly factor: number
+    }
 
 /**
  * Mínimo de filas donde la fórmula se sostiene para creerle.
@@ -82,6 +105,50 @@ function formulaHolds(
   return corroborating >= MIN_CORROBORATING_ROWS
 }
 
+/**
+ * Busca el factor constante `k` tal que `target = source * k` en todas las
+ * filas comparables.
+ *
+ * Exige que `source` tome al menos dos valores DISTINTOS: con una columna que
+ * nunca cambia, la razón es constante por accidente y nada la pone a prueba.
+ * Es el mismo razonamiento que exige oportunidades de refutación a una
+ * dependencia funcional. Descarta también el factor 1, que no es una cuenta
+ * sino el mismo dato repetido.
+ */
+function constantFactor(
+  rows: readonly Row[],
+  target: ColumnName,
+  source: ColumnName,
+): number | null {
+  let factor: number | null = null
+  let corroborating = 0
+  const sourceValues = new Set<number>()
+
+  for (const row of rows) {
+    const expected = asNumber(row[target])
+    const base = asNumber(row[source])
+    if (expected === null || base === null || base === 0) {
+      continue
+    }
+
+    const candidate = expected / base
+    if (factor === null) {
+      factor = candidate
+    } else if (!closeEnough(candidate, factor)) {
+      return null
+    }
+
+    sourceValues.add(base)
+    corroborating += 1
+  }
+
+  if (factor === null || corroborating < MIN_CORROBORATING_ROWS || sourceValues.size < 2) {
+    return null
+  }
+
+  return closeEnough(factor, 1) ? null : factor
+}
+
 export function detectDerivedColumns(table: FlatTable): readonly DerivedColumn[] {
   const numericColumns = table.columns
     .filter((column) => table.rows.some((row) => asNumber(row[column.name]) !== null))
@@ -103,9 +170,29 @@ export function detectDerivedColumns(table: FlatTable): readonly DerivedColumn[]
         ] as const) {
           if (formulaHolds(table.rows, target, left, right, combine)) {
             derived.push({ column: target, operator, operands: [left, right] })
-            break outer
+            continue outer
           }
         }
+      }
+    }
+
+    // Solo si ninguna fórmula de dos columnas la explicó: `precio * cantidad`
+    // dice más que un factor sobre una sola columna, y reportar las dos formas
+    // para la misma columna sería ruido.
+    if (derived.some((entry) => entry.column === target)) {
+      continue
+    }
+
+    for (const source of others) {
+      const factor = constantFactor(table.rows, target, source as ColumnName)
+      if (factor !== null) {
+        derived.push({
+          column: target,
+          operator: "fixed-ratio",
+          operands: [source as ColumnName],
+          factor,
+        })
+        break
       }
     }
   }
